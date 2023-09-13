@@ -14,53 +14,45 @@ fn score(problem: &Problem) -> State {
     state
 }
 
-fn score_impl(problem: &Problem, state: &mut State, ix: Ix) -> Option<usize> {
-    match state.scores.get(&ix) {
-        Some(Progress::Working) => {
-            // Loop: we are guaranteed it is never beneficial to loop,
-            // because extra traversal never reduces cost, so stop here.
-            println!("Infinite loop detected at {:?}", ix);
-            None
-        }
-        Some(Progress::Done(score, _)) =>
+fn score_impl(problem: &Problem, state: &mut State, ix: Ix) -> Edge {
+    match state.nodes.get(&ix) {
+        Some(Node::Working) =>
+            // We will enter an infinite loop if we go here.
+            // However, this path may still be valid in the end: we
+            // just don't know what it costs yet. So return an eddge that
+            // depends on this node.
+            Edge::Depends { cost: 0, node: ix },
+        Some(Node::Done { score, next }) =>
             // We've already done this ix: stop here.
-            Some(*score),
+            Edge::Score { score: *score, next: ix },
         None => {
-            // TODO ok, so I have a bug:
-            //
-            // When I detect a loop at ix X, I ignore the possibility of that traversal when assigning
-            // scores to all the nodes Yi leading from X to X
-            // But ignoring Yi -> X is only valid when we were calculating Y for the purpose of
-            // calculating X. Yi -> X is still valid when arriving at Yi from other places!
-            //
-            // Compared to my simple scala implementation, this mutable one has more sharing ...
-            //
-            // Is it possible to resolve this without making large assumptions about the sort of
-            // loops we have in our traversal? (Assumptions which are valid and CAN be made ... but
-            // I would like this to be less fragile)
- 
-            state.scores.insert(ix, Progress::Working);
+            state.nodes.insert(ix, Node::Working);
             let steps = problem.succ(ix);
 
-            let best_outcome = steps
-                .iter()
-                .filter_map(|step| {
-                    let target_score = score_impl(problem, state, step.ix());
-                    target_score.map(|ts| (step.cost + ts, *step))
-                })
-                .min();
+            let best_edge = steps.iter()
+                .map(|step| score_impl(problem, state, step.ix()).add_cost(step.cost))
+                .reduce(Edge::combine)
+                .and_then(|combined| combined.remove_loop(ix));
 
-            let (score, step) = match best_outcome {
-                Some(outcome) =>
-                    outcome,
+            match best_edge {
                 None => {
                     assert!(ix == problem.end_ix(), "No legal moves at {:?}", ix);
-                    (0, Step::forward(0, ix, 0, 0))
-                }
-            };
-
-            state.scores.insert(ix, Progress::Done(score, step));
-            Some(score)
+                    state.nodes.insert(ix, Node::Done { score: 0, next: ix });
+                    Edge::Score { score: 0, next: ix }
+                },
+                Some(Edge::Score { score , next }) => {
+                    state.nodes.insert(ix, Node::Done { score, next });
+                    Edge::Score { score , next: ix }
+                },
+                Some(Edge::Depends { cost, node }) => {
+                    state.nodes.remove(&ix);
+                    Edge::Depends { cost, node }
+                },
+                Some(Edge::DependsOrScore { cost, node, alt_score, alt_next }) => {
+                    state.nodes.remove(&ix);
+                    Edge::DependsOrScore { cost, node, alt_score, alt_next: ix }
+                },
+            }
         }
     }
 }
@@ -110,36 +102,100 @@ impl Step {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum Progress {
+enum Node {
     Working,
-    Done(usize, Step),
+    Done { score: usize, next: Ix },
+}
+
+#[derive(Copy, Clone, Debug)]
+enum Edge {
+    Score { score: usize , next: Ix },
+    Depends { cost: usize, node: Ix },
+    // Either depends path or path with known score might be viable
+    // alt_score should be > cost
+    DependsOrScore { cost: usize, node: Ix, alt_score: usize, alt_next: Ix },
+}
+
+impl Edge {
+    fn combine(left: Self, right: Self) -> Self {
+        match (left, right) {
+            (Edge::Score { score: score_l , .. }, Edge::Score { score: score_r, .. }) if score_l <= score_r =>
+                left,
+            (Edge::Score { score: score_l , .. }, Edge::Score { score: score_r, .. }) if score_l > score_r =>
+                right,
+            (Edge::Score { score, .. }, Edge::Depends { cost, .. }) if score <= cost =>
+                left,
+            (Edge::Score { score, next }, Edge::Depends { cost, node }) if score > cost =>
+                Edge::DependsOrScore { cost: cost, node: node, alt_score: score, alt_next: next },
+            (Edge::Score { score, ..}, Edge::DependsOrScore { cost, .. }) if score <= cost =>
+                left,
+            (Edge::Score { score, .. }, Edge::DependsOrScore { alt_score, .. }) if score > alt_score =>
+                right,
+            (Edge::Score { score, next }, Edge::DependsOrScore { cost, node, .. }) => 
+                Edge::DependsOrScore { cost: cost, node: node, alt_score: score, alt_next: next },
+            (Edge::Depends { .. }, Edge::Score { .. }) =>
+                Self::combine(right, left),
+            (Edge::DependsOrScore { .. }, Edge::Score { .. }) =>
+                Self::combine(right, left),
+            _ =>
+                // Ok, so we do hit this condition with nested kleenes:
+                // need to understand how, as I thought this would only happen if kleene groups were interleaved
+                panic!("Cannot handle multiple depends edges {:?} and {:?}", left, right),
+        }
+    }
+
+    fn remove_loop(&self, current: Ix) -> Option<Edge> {
+        match self {
+            Edge::Depends { node, .. } if *node == current =>
+                None,
+            Edge::DependsOrScore { node, alt_score, alt_next, .. } if *node == current =>
+                Some(Edge::Score { score: *alt_score, next: *alt_next }),
+            _ =>
+                Some(*self)
+        }
+    }
+
+    fn add_cost(&self, extra: usize) -> Edge {
+        match self {
+            Edge::Score { score, next } => Edge::Score { score: *score + extra, next: *next },
+            Edge::Depends { cost, node } => Edge::Depends { cost: *cost + extra, node: *node },
+            Edge::DependsOrScore { cost, node, alt_score, alt_next } => Edge::DependsOrScore {
+                cost: *cost + extra,
+                node: *node,
+                alt_score: *alt_score + extra,
+                alt_next: *alt_next
+            }
+        }
+    }
 }
 
 struct State {
-  scores: HashMap<Ix, Progress>,
+  nodes: HashMap<Ix, Node>,
 }
 
 impl State {
     fn new() -> State {
-        State { scores: HashMap::new() }
+        State {
+            nodes: HashMap::new(),
+        }
     }
 
     fn score(&self, problem: &Problem) -> Option<usize> {
-        match self.scores.get(&problem.start_ix()) {
-            Some(Progress::Done(score, _)) => Some(*score),
+        match self.nodes.get(&problem.start_ix()) {
+            Some(Node::Done { score, .. }) => Some(*score),
             _ => None,
         }
     }
 
-    fn trace(&self, problem: &Problem) -> Option<Vec<Step>> {
+    fn trace(&self, problem: &Problem) -> Option<Vec<Ix>> {
         let mut optimal = vec![];
         let mut ix = problem.start_ix();
-        while let Some(Progress::Done(_, step)) = self.scores.get(&ix) {
+        while let Some(Node::Done { score, next }) = self.nodes.get(&ix) {
             if ix == problem.end_ix() {
                 return Some(optimal);
             }
-            optimal.push(*step);
-            ix = step.ix();
+            ix = *next;
+            optimal.push(ix);
         }
         return None;
     }
@@ -207,7 +263,7 @@ mod tests {
     use std::collections::HashSet;
     use super::*;
 
-    fn p_empty() -> Problem {
+    fn p_match_empty() -> Problem {
         Problem {
             pattern: vec![Patt::End],
             text:    vec![Text::End],
@@ -221,6 +277,13 @@ mod tests {
         }
     }
 
+    fn p_match_lit_2() -> Problem {
+        Problem {
+            pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::End],
+            text:    vec![Text::Lit('a'), Text::Lit('b'), Text::End],
+        }
+    }
+
     fn p_match_kleene_1() -> Problem {
         Problem {
             pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
@@ -228,13 +291,71 @@ mod tests {
         }
     }
 
+    fn p_match_kleene_2() -> Problem {
+        Problem {
+            pattern: vec![
+                Patt::KleeneStart(5),
+                Patt::Lit('a'),
+                Patt::KleeneStart(2),
+                Patt::Lit('b'),
+                Patt::KleeneEnd(2),
+                Patt::KleeneEnd(5),
+                Patt::End
+            ],
+            text: vec![
+                Text::Lit('a'),
+                Text::Lit('a'),
+                Text::Lit('b'),
+                Text::Lit('a'),
+                Text::Lit('b'),
+                Text::Lit('b'),
+                Text::End
+            ],
+        }
+    }
+
+    fn p_fail_empty_1() -> Problem {
+        Problem {
+            pattern: vec![Patt::End],
+            text:    vec![Text::Lit('a'), Text::End],
+        }
+    }
+
+    fn p_fail_empty_2() -> Problem {
+        Problem {
+            pattern: vec![Patt::Lit('a'), Patt::End],
+            text:    vec![Text::End],
+        }
+    }
+
+    fn p_fail_lit_1() -> Problem {
+        Problem {
+            pattern: vec![Patt::Lit('a'), Patt::End],
+            text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
+        }
+    }
+
+    fn p_fail_lit_2() -> Problem {
+        Problem {
+            pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::Lit('a'), Patt::End],
+            text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
+        }
+    }
+
+    fn p_fail_kleene_1() -> Problem {
+        Problem {
+            pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
+            text:    vec![Text::Lit('a'), Text::Lit('b'), Text::Lit('a'), Text::End],
+        }
+    }
+
     fn p_all() -> Vec<Problem> {
-        vec![p_empty(), p_match_lit_1(), p_match_kleene_1()]
+        vec![p_match_empty(), p_match_lit_1(), p_match_kleene_1()]
     }
 
     #[test]
-    fn score_empty() {
-        let p = p_empty();
+    fn score_match_empty() {
+        let p = p_match_empty();
         let state = score(&p);
         let expected = Some(vec![]);
         let actual = state.trace(&p);
@@ -242,29 +363,113 @@ mod tests {
     }
 
     #[test]
-    fn score_lit_match() {
+    fn score_match_lit_1() {
         let p = p_match_lit_1();
         let state = score(&p);
         let expected = Some(vec![
-            Step { cost: 0, pix: 1, tix: 1 },
+            Ix { pix: 1, tix: 1 },
         ]);
         let actual = state.trace(&p);
         assert_eq!(expected, actual);
     }
 
     #[test]
-    fn score_kleene_match() {
+    fn score_match_lit_2() {
+        let p = p_match_lit_2();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 1, tix: 1 },
+            Ix { pix: 2, tix: 2 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_match_kleene_1() {
         let p = p_match_kleene_1();
         let state = score(&p);
         let expected = Some(vec![
-            Step { cost: 0, pix: 1, tix: 0 },
-            Step { cost: 0, pix: 2, tix: 1 },
-            Step { cost: 0, pix: 0, tix: 1 },
-            Step { cost: 0, pix: 1, tix: 1 },
-            Step { cost: 0, pix: 2, tix: 2 },
-            Step { cost: 0, pix: 3, tix: 2 },
+            Ix { pix: 1, tix: 0 },
+            Ix { pix: 2, tix: 1 },
+            Ix { pix: 0, tix: 1 },
+            Ix { pix: 1, tix: 1 },
+            Ix { pix: 2, tix: 2 },
+            Ix { pix: 3, tix: 2 },
         ]);
         let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_match_kleene_2() {
+        let p = p_match_kleene_2();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 1, tix: 0 },
+            Ix { pix: 2, tix: 1 },
+            Ix { pix: 0, tix: 1 },
+            Ix { pix: 1, tix: 1 },
+            Ix { pix: 2, tix: 2 },
+            Ix { pix: 3, tix: 2 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_fail_empty_1() {
+        let p = p_fail_empty_1();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 0, tix: 1 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_fail_empty_2() {
+        let p = p_fail_empty_2();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 1, tix: 0 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_fail_lit_1() {
+        let p = p_fail_lit_1();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 1, tix: 1 },
+            Ix { pix: 1, tix: 2 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_fail_lit_2() {
+        let p = p_fail_lit_2();
+        let state = score(&p);
+        let expected = Some(vec![
+            Ix { pix: 1, tix: 1 },
+            Ix { pix: 2, tix: 1 },
+            Ix { pix: 3, tix: 2 },
+        ]);
+        let actual = state.trace(&p);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn score_fail_kleene_1() {
+        let p = p_fail_kleene_1();
+        let state = score(&p);
+        let expected = Some(1);
+        let actual = state.score(&p);
         assert_eq!(expected, actual);
     }
 
@@ -277,7 +482,7 @@ mod tests {
 
     #[test]
     fn problem_end_ix() {
-        assert_eq!(p_empty().end_ix(), Ix { pix: 0, tix: 0 });
+        assert_eq!(p_match_empty().end_ix(), Ix { pix: 0, tix: 0 });
         assert_eq!(p_match_lit_1().end_ix(), Ix { pix: 1, tix: 1 });
         assert_eq!(p_match_kleene_1().end_ix(), Ix { pix: 3, tix: 2 });
     }
