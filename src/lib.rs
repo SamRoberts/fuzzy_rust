@@ -1,4 +1,7 @@
 use std::collections::hash_map::HashMap;
+use pattern::{Pattern, Patt};
+
+pub mod pattern;
 
 // Initial naive attempt
 // Takes hashmap from simple scala implementation as well as recursive traversal
@@ -10,24 +13,13 @@ use std::collections::hash_map::HashMap;
 
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum Patt {
-    Lit(char),
-    Any,
-    GroupStart,
-    GroupEnd,
-    KleeneStart(usize), // the offset of the end
-    KleeneEnd(usize),   // the offset of the start
-    End,
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum Text {
+pub enum Text {
     Lit(char),
     End
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-struct Ix {
+pub struct Ix {
     // There is a separate score associated with each combination of:
     //   1. the place we are up to in the pattern
     //   2. the place we are up to in the text
@@ -37,9 +29,9 @@ struct Ix {
     //      the text since starting that kleene.
 
     // TODO let's change these ix names later ...
-    pix: usize,
-    tix: usize,
-    kix: usize,
+    pub pix: usize,
+    pub tix: usize,
+    pub kix: usize,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
@@ -60,16 +52,16 @@ enum Node {
     Done(Score),
 }
 
-struct State {
+pub struct State {
   nodes: HashMap<Ix, Node>,
 }
 
-struct Problem {
-  pattern: Vec<Patt>,
-  text: Vec<Text>,
+pub struct Problem {
+  pub pattern: Vec<Patt>,
+  pub text: Vec<Text>,
 }
 
-fn score(problem: &Problem) -> State {
+pub fn score(problem: &Problem) -> State {
     let mut state = State::new();
     let _ = score_impl(problem, &mut state, problem.start_ix());
     state
@@ -155,14 +147,18 @@ impl State {
         }
     }
 
-    fn score(&self, problem: &Problem) -> Option<usize> {
-        match self.nodes.get(&problem.start_ix()) {
+    pub fn score(&self, problem: &Problem) -> Option<usize> {
+        self.score_ix(&problem.start_ix())
+    }
+
+    pub fn score_ix(&self, ix: &Ix) -> Option<usize> {
+        match self.nodes.get(ix) {
             Some(Node::Done(Score { score, .. })) => Some(*score),
             _ => None,
         }
     }
 
-    fn trace(&self, problem: &Problem) -> Option<Vec<Ix>> {
+    pub fn trace(&self, problem: &Problem) -> Option<Vec<Ix>> {
         let mut optimal = vec![];
         let mut ix = problem.start_ix();
         while let Some(Node::Done(Score { next, .. })) = self.nodes.get(&ix) {
@@ -177,11 +173,23 @@ impl State {
 }
 
 impl Problem {
-    fn start_ix(&self) -> Ix {
+    // TODO extract a nicer API for Text/Patt/Pattern/Problem
+    // probably one module encapsulating these
+    pub fn new(pattern: Pattern, text: String) -> Problem {
+        let mut text_vec: Vec<Text> = text.chars().map(|c| Text::Lit(c)).collect();
+        text_vec.push(Text::End);
+
+        Problem {
+            pattern: pattern.items,
+            text: text_vec
+        }
+    }
+
+    pub fn start_ix(&self) -> Ix {
         Ix { pix: 0, tix: 0, kix: 0 }
     }
 
-    fn end_ix(&self) -> Ix {
+    pub fn end_ix(&self) -> Ix {
         Ix { pix: self.pattern.len() - 1, tix: self.text.len() - 1, kix: 0 }
     }
 
