@@ -1,6 +1,6 @@
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
-use std::error::Error;
+use crate::error::Error;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum Patt {
@@ -19,7 +19,7 @@ pub struct Pattern {
 }
 
 impl Pattern {
-    pub fn parse(pattern: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn parse(pattern: &str) -> Result<Self, Error> {
         let hir = regex_syntax::parse(pattern)?;
         let mut items = vec![];
         Self::parse_impl(&hir, &mut items)?;
@@ -27,10 +27,11 @@ impl Pattern {
         Ok(Self { items })
     }
 
-    fn parse_impl(hir: &Hir, items: &mut Vec<Patt>) -> Result<usize, Box<dyn Error>> {
-        let HirKind::Class(wildcard_class) = regex_syntax::parse(".")?.into_kind() else {
-            panic!("Unexpected representation of hir wildcard")
-        };
+    fn parse_impl(hir: &Hir, items: &mut Vec<Patt>) -> Result<usize, Error> {
+        let wildcard_class = match regex_syntax::parse(".")?.into_kind() {
+            HirKind::Class(c) => Ok(c),
+            unsupported => Err(Error::UnexpectedRegexRepr(format!("{:?}", unsupported))),
+        }?;
 
         match hir.kind() {
             HirKind::Literal(Literal(ref bytes)) => {
@@ -66,8 +67,8 @@ impl Pattern {
                 }
                 Ok(sum)
             }
-            _ => {
-                Err(format!("Did not recognize {:?}", hir).into())
+            unsupported => {
+                Err(Error::PatternUnsupported(format!("{:?}", unsupported)))
             }
         }
     }

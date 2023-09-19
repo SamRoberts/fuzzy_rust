@@ -1,7 +1,9 @@
 use std::collections::hash_map::HashMap;
-use pattern::{Pattern, Patt};
+use self::pattern::{Pattern, Patt};
+use crate::error::Error;
 
 pub mod pattern;
+pub mod error;
 
 // Initial naive attempt
 // Takes hashmap from simple scala implementation as well as recursive traversal
@@ -61,33 +63,36 @@ pub struct Problem {
   pub text: Vec<Text>,
 }
 
-pub fn score(problem: &Problem) -> State {
+pub fn score(problem: &Problem) -> Result<State, Error> {
     let mut state = State::new();
-    let _ = score_impl(problem, &mut state, problem.start_ix());
-    state
+    let _ = score_impl(problem, &mut state, problem.start_ix(), 0)?;
+    Ok(state)
 }
 
-fn score_impl(problem: &Problem, state: &mut State, ix: Ix) -> Score {
+fn score_impl(problem: &Problem, state: &mut State, ix: Ix, cost: usize) -> Result<Score, Error> {
     match state.nodes.get(&ix) {
         Some(Node::Working) =>
-            panic!("About to enter an infinite loop at {:?}", ix),
+            Err(Error::InfiniteLoop(format!("{:?}", ix))),
         Some(Node::Done(score)) =>
-            Score { score: score.score, next: ix },
+            Ok(Score { score: score.score + cost, next: ix }),
         None => {
             state.nodes.insert(ix, Node::Working);
             let steps = problem.succ(ix);
 
             let maybe_score = steps.iter()
-                .map(|step| score_impl(problem, state, step.next).add_cost(step.cost))
-                .reduce(Score::combine);
+                .map(|step| score_impl(problem, state, step.next, step.cost))
+                .reduce(Score::combine_result);
 
             let score = maybe_score.unwrap_or_else(|| {
-                assert!(ix == problem.end_ix(), "No legal moves at {:?}", ix);
-                Score { score: 0, next: problem.end_ix() }
-            });
+                if ix == problem.end_ix() {
+                    Ok(Score { score: 0, next: problem.end_ix() })
+                } else {
+                    Err(Error::Blocked(format!("{:?}", ix)))
+                }
+            })?;
 
             state.nodes.insert(ix, Node::Done(score));
-            Score { score: score.score, next: ix }
+            Ok(Score { score: score.score + cost, next: ix })
         }
     }
 }
@@ -131,8 +136,12 @@ impl Step {
 }
 
 impl Score {
-    fn add_cost(&self, cost: usize) -> Score {
-        Score { score: self.score + cost, ..*self }
+    fn combine_result<E>(left: Result<Self, E>, right: Result<Self, E>) -> Result<Self, E> {
+        match (left, right) {
+            (Ok(l), Ok(r)) => Ok(Self::combine(l, r)),
+            (Err(l), _)    => Err(l),
+            (_, Err(r))    => Err(r),
+        }
     }
 
     fn combine(left: Self, right: Self) -> Self {
@@ -147,28 +156,30 @@ impl State {
         }
     }
 
-    pub fn score(&self, problem: &Problem) -> Option<usize> {
+    // TODO come up with score return type that guaramtees it contains all final information
+
+    pub fn score(&self, problem: &Problem) -> Result<usize, Error> {
         self.score_ix(&problem.start_ix())
     }
 
-    pub fn score_ix(&self, ix: &Ix) -> Option<usize> {
+    pub fn score_ix(&self, ix: &Ix) -> Result<usize, Error> {
         match self.nodes.get(ix) {
-            Some(Node::Done(Score { score, .. })) => Some(*score),
-            _ => None,
+            Some(Node::Done(Score { score, .. })) => Ok(*score),
+            _ => Err(Error::IncompleteFinalState),
         }
     }
 
-    pub fn trace(&self, problem: &Problem) -> Option<Vec<Ix>> {
+    pub fn trace(&self, problem: &Problem) -> Result<Vec<Ix>, Error> {
         let mut optimal = vec![];
         let mut ix = problem.start_ix();
         while let Some(Node::Done(Score { next, .. })) = self.nodes.get(&ix) {
             if ix == problem.end_ix() {
-                return Some(optimal);
+                return Ok(optimal);
             }
             ix = *next;
             optimal.push(ix);
         }
-        return None;
+        return Err(Error::IncompleteFinalState);
     }
 }
 
@@ -345,40 +356,40 @@ mod tests {
     #[test]
     fn score_match_empty() {
         let p = p_match_empty();
-        let state = score(&p);
-        let expected = Some(vec![]);
-        let actual = state.trace(&p);
+        let state = score(&p).unwrap();
+        let expected: Vec<Ix> = vec![];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_match_lit_1() {
         let p = p_match_lit_1();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 1, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_match_lit_2() {
         let p = p_match_lit_2();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 1, kix: 0 },
             Ix { pix: 2, tix: 2, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_match_kleene_1() {
         let p = p_match_kleene_1();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 0, kix: 1 },
             Ix { pix: 2, tix: 1, kix: 0 },
             Ix { pix: 0, tix: 1, kix: 0 },
@@ -386,16 +397,16 @@ mod tests {
             Ix { pix: 2, tix: 2, kix: 0 },
             Ix { pix: 0, tix: 2, kix: 0 },
             Ix { pix: 3, tix: 2, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_match_kleene_2() {
         let p = p_match_kleene_2();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 0, kix: 1 },
             Ix { pix: 2, tix: 1, kix: 0 },
             Ix { pix: 5, tix: 1, kix: 0 },
@@ -418,64 +429,64 @@ mod tests {
             Ix { pix: 5, tix: 6, kix: 0 },
             Ix { pix: 0, tix: 6, kix: 0 },
             Ix { pix: 6, tix: 6, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_fail_empty_1() {
         let p = p_fail_empty_1();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 0, tix: 1, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_fail_empty_2() {
         let p = p_fail_empty_2();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 0, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_fail_lit_1() {
         let p = p_fail_lit_1();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 1, kix: 0 },
             Ix { pix: 1, tix: 2, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_fail_lit_2() {
         let p = p_fail_lit_2();
-        let state = score(&p);
-        let expected = Some(vec![
+        let state = score(&p).unwrap();
+        let expected = vec![
             Ix { pix: 1, tix: 1, kix: 0 },
             Ix { pix: 2, tix: 1, kix: 0 },
             Ix { pix: 3, tix: 2, kix: 0 },
-        ]);
-        let actual = state.trace(&p);
+        ];
+        let actual = state.trace(&p).unwrap();
         assert_eq!(expected, actual);
     }
 
     #[test]
     fn score_fail_kleene_1() {
         let p = p_fail_kleene_1();
-        let state = score(&p);
-        let expected = Some(1);
-        let actual = state.score(&p);
+        let state = score(&p).unwrap();
+        let expected = 1;
+        let actual = state.score(&p).unwrap();
         assert_eq!(expected, actual);
     }
 

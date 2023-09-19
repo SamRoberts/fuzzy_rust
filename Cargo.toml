@@ -14,3 +14,4 @@ publish = false # don't publish anywhere, for now
 [dependencies]
 clap = { version = "4.4.3", features = ["derive"] }
 regex-syntax = "0.7.5"
+thiserror = "1.0.48"
