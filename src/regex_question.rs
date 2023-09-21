@@ -1,30 +1,35 @@
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
+use crate::{Patt, Problem, Question, Text};
 use crate::error::Error;
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub enum Patt {
-    Lit(char), // TODO modify to take bytes like regex library. For now, assuming ascii
-    Any,
-    GroupStart,
-    GroupEnd,
-    KleeneStart(usize), // the offset of the end
-    KleeneEnd(usize),   // the offset of the start
-    End,
+pub struct RegexQuestion {
+    pub pattern_regex: String,
+    pub text: String,
 }
 
-#[derive(Eq, PartialEq, Debug)]
-pub struct Pattern {
-    pub items: Vec<Patt>,
+impl Question<Error> for RegexQuestion {
+    fn ask(&self) -> Result<Problem, Error> {
+        let text = Self::new_text(&self.text);
+        let pattern = Self::parse_pattern(&self.pattern_regex)?;
+        Ok(Problem { pattern, text })
+    }
 }
 
-impl Pattern {
-    pub fn parse(pattern: &str) -> Result<Self, Error> {
+impl RegexQuestion {
+
+    pub fn new_text(text: &str) -> Vec<Text> {
+        let mut text_vec: Vec<Text> = text.chars().map(|c| Text::Lit(c)).collect();
+        text_vec.push(Text::End);
+        text_vec
+    }
+
+    fn parse_pattern(pattern: &str) -> Result<Vec<Patt>, Error> {
         let hir = regex_syntax::parse(pattern)?;
         let mut items = vec![];
         Self::parse_impl(&hir, &mut items)?;
         items.push(Patt::End);
-        Ok(Self { items })
+        Ok(items)
     }
 
     fn parse_impl(hir: &Hir, items: &mut Vec<Patt>) -> Result<usize, Error> {
@@ -114,11 +119,10 @@ mod tests {
 
     fn parse_test(pattern: &str, expected: Vec<Patt>) {
         // TODO see if we can avoid this unnecesary copying?
-        let mut expected_with_end = expected.clone();
-        expected_with_end.push(Patt::End);
-        let expected_pattern = Pattern { items: expected_with_end };
+        let mut expected_pattern = expected.clone();
+        expected_pattern.push(Patt::End);
 
-        let actual_pattern = Pattern::parse(pattern).expect("Cannot parse pattern");
+        let actual_pattern = RegexQuestion::parse_pattern(&pattern).expect("Cannot parse pattern");
         assert_eq!(expected_pattern, actual_pattern);
     }
 

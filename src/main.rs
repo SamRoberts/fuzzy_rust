@@ -1,6 +1,7 @@
 use clap::Parser;
-use fuzzy::{Problem, score};
-use fuzzy::pattern::Pattern;
+use fuzzy::{Question, Solution};
+use fuzzy::map_solution::MapSolution;
+use fuzzy::regex_question::RegexQuestion;
 use fuzzy::error::Error;
 
 #[derive(Parser, Debug)]
@@ -15,23 +16,19 @@ struct Args {
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
+    let question = RegexQuestion {
+        pattern_regex: args.pattern,
+        text: args.text
+    };
+    main_impl::<RegexQuestion, MapSolution>(question)
+}
 
-    // TODO extract nicer API out of lib.rs
-
-    let pattern = Pattern::parse(&args.pattern)?;
-
-    let problem = Problem::new(pattern, args.text);
-
-    let state = score(&problem)?;
-
-    let trace = state.trace(&problem)?;
-
-    let ix = problem.start_ix();
-    let score = state.score_ix(&ix)?;
-    println!("score {} at {:?} <-> {:?}", score, problem.pattern[ix.pix], problem.text[ix.tix]);
-    for ix in trace.iter() {
-        let score = state.score_ix(&ix)?;
-        println!("score {} at {:?} <-> {:?}", score, problem.pattern[ix.pix], problem.text[ix.tix]);
+fn main_impl<Q: Question<Error>, S: Solution<Error>>(question: Q) -> Result<(), Error> {
+    let problem = question.ask()?;
+    let solution = S::solve(&problem)?;
+    for step in solution.trace().iter() {
+        println!("{:?}", step);
     }
+
     Ok(())
 }
