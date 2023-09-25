@@ -1,6 +1,6 @@
 use clap::Parser;
 use fuzzy::{Question, Solution};
-use fuzzy::map_solution::MapSolution;
+use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;
 use fuzzy::error::Error;
 
@@ -20,7 +20,7 @@ fn main() -> Result<(), Error> {
         pattern_regex: args.pattern,
         text: args.text
     };
-    main_impl::<RegexQuestion, MapSolution>(question)
+    main_impl::<RegexQuestion, TableSolution>(question)
 }
 
 fn main_impl<Q: Question<Error>, S: Solution<Error>>(question: Q) -> Result<(), Error> {

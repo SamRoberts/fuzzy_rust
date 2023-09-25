@@ -1,5 +1,6 @@
 pub mod regex_question;
 pub mod map_solution;
+pub mod table_solution;
 pub mod error;
 
 pub trait Question<Error> {
