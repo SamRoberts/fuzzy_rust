@@ -1,4 +1,5 @@
 pub mod regex_question;
+pub mod lattice_solution;
 pub mod map_solution;
 pub mod table_solution;
 pub mod error;
@@ -13,6 +14,7 @@ pub trait Solution<Error> : Sized {
     fn trace(&self) -> &Vec<Step>;
 }
 
+#[derive(Clone)]
 pub struct Problem {
     pub pattern: Vec<Patt>,
     pub text: Vec<Text>,
