@@ -1,5 +1,6 @@
 use clap::Parser;
-use fuzzy::{Question, Solution};
+use fuzzy::{Output, Question, Solution};
+use fuzzy::debug_output::DebugOutput;
 use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;
 use fuzzy::error::Error;
@@ -20,15 +21,14 @@ fn main() -> Result<(), Error> {
         pattern_regex: args.pattern,
         text: args.text
     };
-    main_impl::<RegexQuestion, TableSolution>(question)
+    main_impl::<RegexQuestion, TableSolution, DebugOutput>(question)
 }
 
-fn main_impl<Q: Question<Error>, S: Solution<Error>>(question: Q) -> Result<(), Error> {
+fn main_impl<Q: Question<Error>, S: Solution<Error>, O: Output>(question: Q) -> Result<(), Error> {
     let problem = question.ask()?;
     let solution = S::solve(&problem)?;
-    for step in solution.trace().iter() {
-        println!("{:?}", step);
-    }
+    let output = O::new(&problem, solution.score(), solution.trace());
+    println!("{}", output);
 
     Ok(())
 }

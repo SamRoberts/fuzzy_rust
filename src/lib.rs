@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 pub mod regex_question;
 pub mod lattice_solution;
 pub mod map_solution;
 pub mod table_solution;
+pub mod debug_output;
 pub mod error;
 
 pub trait Question<Error> {
@@ -12,6 +15,10 @@ pub trait Solution<Error> : Sized {
     fn solve(problem: &Problem) -> Result<Self, Error>;
     fn score(&self) -> &usize;
     fn trace(&self) -> &Vec<Step>;
+}
+
+pub trait Output : Display {
+    fn new(problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self;
 }
 
 #[derive(Clone)]
