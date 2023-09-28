@@ -292,6 +292,11 @@ mod tests {
         tests::test_solve_fail_lit_2::<TableSolution>();
     }
 
+
+    #[test]
+    fn test_solve_fail_lit_3() {
+        tests::test_solve_fail_lit_3::<TableSolution>();
+    }
     #[test]
     fn test_solve_fail_kleene_1() {
         tests::test_solve_fail_kleene_1::<TableSolution>();

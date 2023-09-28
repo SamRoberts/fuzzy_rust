@@ -199,6 +199,11 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_fail_lit_3() {
+        tests::test_solve_fail_lit_3::<MapSolution>();
+    }
+
+    #[test]
     fn test_solve_fail_kleene_1() {
         tests::test_solve_fail_kleene_1::<MapSolution>();
     }
