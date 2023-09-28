@@ -220,190 +220,60 @@ pub struct Next<Ix> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::test_cases::TestCase;
 
     pub fn test_solve_match_empty<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::End],
-            text:    vec![Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 0;
-        let expected_trace: Vec<Step> = vec![];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::match_empty());
     }
 
     pub fn test_solve_match_lit_1<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::Lit('a'), Patt::End],
-            text:    vec![Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 0;
-        let expected_trace = vec![
-            step(0, 0, 1, 1, 0, StepKind::Hit),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::match_lit_1());
     }
 
     pub fn test_solve_match_lit_2<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::End],
-            text:    vec![Text::Lit('a'), Text::Lit('b'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 0;
-        let expected_trace = vec![
-            step(0, 0, 1, 1, 0, StepKind::Hit),
-            step(1, 1, 2, 2, 0, StepKind::Hit),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::match_lit_2());
     }
 
     pub fn test_solve_match_kleene_1<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
-            text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 0;
-        let expected_trace = vec![
-            step(0, 0, 1, 0, 0, StepKind::NoOp),
-            step(1, 0, 2, 1, 0, StepKind::Hit),
-            step(2, 1, 0, 1, 0, StepKind::NoOp),
-            step(0, 1, 1, 1, 0, StepKind::NoOp),
-            step(1, 1, 2, 2, 0, StepKind::Hit),
-            step(2, 2, 0, 2, 0, StepKind::NoOp),
-            step(0, 2, 3, 2, 0, StepKind::NoOp),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::match_kleene_1());
     }
 
     pub fn test_solve_match_kleene_2<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![
-                Patt::KleeneStart(5),
-                Patt::Lit('a'),
-                Patt::KleeneStart(2),
-                Patt::Lit('b'),
-                Patt::KleeneEnd(2),
-                Patt::KleeneEnd(5),
-                Patt::End
-            ],
-            text: vec![
-                Text::Lit('a'),
-                Text::Lit('a'),
-                Text::Lit('b'),
-                Text::Lit('a'),
-                Text::Lit('b'),
-                Text::Lit('b'),
-                Text::End
-            ],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 0;
-        let expected_trace = vec![
-            step(0, 0, 1, 0, 0, StepKind::NoOp),
-            step(1, 0, 2, 1, 0, StepKind::Hit),
-            step(2, 1, 5, 1, 0, StepKind::NoOp),
-            step(5, 1, 0, 1, 0, StepKind::NoOp),
-            step(0, 1, 1, 1, 0, StepKind::NoOp),
-            step(1, 1, 2, 2, 0, StepKind::Hit),
-            step(2, 2, 3, 2, 0, StepKind::NoOp),
-            step(3, 2, 4, 3, 0, StepKind::Hit),
-            step(4, 3, 2, 3, 0, StepKind::NoOp),
-            step(2, 3, 5, 3, 0, StepKind::NoOp),
-            step(5, 3, 0, 3, 0, StepKind::NoOp),
-            step(0, 3, 1, 3, 0, StepKind::NoOp),
-            step(1, 3, 2, 4, 0, StepKind::Hit),
-            step(2, 4, 3, 4, 0, StepKind::NoOp),
-            step(3, 4, 4, 5, 0, StepKind::Hit),
-            step(4, 5, 2, 5, 0, StepKind::NoOp),
-            step(2, 5, 3, 5, 0, StepKind::NoOp),
-            step(3, 5, 4, 6, 0, StepKind::Hit),
-            step(4, 6, 2, 6, 0, StepKind::NoOp),
-            step(2, 6, 5, 6, 0, StepKind::NoOp),
-            step(5, 6, 0, 6, 0, StepKind::NoOp),
-            step(0, 6, 6, 6, 0, StepKind::NoOp),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::match_kleene_2());
     }
 
     pub fn test_solve_fail_empty_1<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::End],
-            text:    vec![Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 1;
-        let expected_trace = vec![
-            step(0, 0, 0, 1, 1, StepKind::SkipText),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::fail_empty_1());
     }
 
     pub fn test_solve_fail_empty_2<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::Lit('a'), Patt::End],
-            text:    vec![Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 1;
-        let expected_trace = vec![
-            step(0, 0, 1, 0, 1, StepKind::SkipPattern),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::fail_empty_2());
     }
 
     pub fn test_solve_fail_lit_1<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::Lit('a'), Patt::End],
-            text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 1;
-        let expected_trace = vec![
-            step(0, 0, 1, 1, 1, StepKind::Hit),
-            step(1, 1, 1, 2, 1, StepKind::SkipText),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::fail_lit_1());
     }
 
     pub fn test_solve_fail_lit_2<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::Lit('a'), Patt::End],
-            text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 1;
-        let expected_trace = vec![
-            step(0, 0, 1, 1, 1, StepKind::Hit),
-            step(1, 1, 2, 1, 1, StepKind::SkipPattern),
-            step(2, 1, 3, 2, 0, StepKind::Hit),
-        ];
-        assert_eq!(expected_score, *actual.score());
-        assert_eq!(expected_trace, *actual.trace());
+        test_solve_for_test_case::<Sln>(TestCase::fail_lit_2());
+    }
+
+    pub fn test_solve_fail_lit_3<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::fail_lit_3());
     }
 
     pub fn test_solve_fail_kleene_1<Sln: LatticeSolution>() {
-        let problem = Problem {
-            pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
-            text:    vec![Text::Lit('a'), Text::Lit('b'), Text::Lit('a'), Text::End],
-        };
-        let actual = Sln::solve(&problem).unwrap();
-        let expected_score = 1;
-        // there are multiple valid traces so can't check expected_trace
-        assert_eq!(expected_score, *actual.score());
+        test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_kleene_1());
     }
 
-    fn step(from_patt: usize, from_text: usize, to_patt: usize, to_text: usize, score: usize, kind: StepKind) -> Step {
-        Step { from_patt, from_text, to_patt, to_text, score, kind }
+    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step>>) {
+        let actual = Sln::solve(&test_case.problem).unwrap();
+        assert_eq!(test_case.score, *actual.score());
+        assert_eq!(test_case.trace, *actual.trace());
+    }
+
+    pub fn test_solve_for_test_case_with_ambiguous_trace<Sln: LatticeSolution>(test_case: TestCase<()>) {
+        let actual = Sln::solve(&test_case.problem).unwrap();
+        assert_eq!(test_case.score, *actual.score());
     }
 }

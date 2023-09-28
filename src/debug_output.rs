@@ -6,7 +6,7 @@ pub struct DebugOutput {
 }
 
 impl Output for DebugOutput {
-    fn new(problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self {
+    fn new(_problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self {
         Self { output: format!("score: {}\ntrace: {:#?}", *score, *trace) }
     }
 }
