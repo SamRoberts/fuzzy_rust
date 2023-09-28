@@ -4,23 +4,36 @@ use fuzzy::diff_output::DiffOutput;
 use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;
 use fuzzy::error::Error;
+use std::fs;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// The regex pattern to match TEXT.
+    /// File containing the regex pattern to match TEXT.
     pattern: String,
 
-    /// The text to be matched.
+    /// File containing the text to be matched.
     text: String,
+
+    /// PATTERN and TEXT args are raw pattern/text values rather than file names
+    #[arg(short, long)]
+    inline: bool,
 }
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
-    let question = RegexQuestion {
-        pattern_regex: args.pattern,
-        text: args.text
+    let pattern_regex = if args.inline {
+        args.pattern
+    } else {
+        fs::read_to_string(args.pattern)?
     };
+    let text = if args.inline {
+        args.text
+    } else {
+        fs::read_to_string(args.text)?
+    };
+
+    let question = RegexQuestion { pattern_regex, text };
     main_impl::<RegexQuestion, TableSolution, DiffOutput>(question)
 }
 
