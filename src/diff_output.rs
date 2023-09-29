@@ -1,6 +1,5 @@
 use crate::{Output, Patt, Problem, Step, StepKind, Text};
 use std::fmt;
-use std::ops::Index;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
 // for now. Instead, we will mimic the git diff format, expect we print out all matching
@@ -48,15 +47,15 @@ impl Output for DiffOutput {
         let mut chunks = vec![];
         for step in trace.iter() {
             let current_chunk = chunks.last_mut();
-            match (step.kind, current_chunk, problem.text.index(step.from_text), problem.pattern.index(step.from_patt)) {
-                (StepKind::Hit,         Some(Chunk::Same(same)), Text::Lit(c), _) => same.text.push(*c),
-                (StepKind::Hit,         _,                       Text::Lit(c), _) => chunks.push(Chunk::new_same(*c)),
-                (StepKind::SkipText,    Some(Chunk::Diff(diff)), Text::Lit(c), _) => diff.added.push(*c),
-                (StepKind::SkipText,    _,                       Text::Lit(c), _) => chunks.push(Chunk::new_added(*c)),
-                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Lit(c)) => diff.taken.push(*c),
-                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Any)    => diff.taken.push(ANY),
-                (StepKind::SkipPattern, _,                       _, Patt::Lit(c)) => chunks.push(Chunk::new_taken(*c)),
-                (StepKind::SkipPattern, _,                       _, Patt::Any)    => chunks.push(Chunk::new_taken(ANY)),
+            match (step.kind, current_chunk, &problem.text[step.from_text], &problem.pattern[step.from_patt]) {
+                (StepKind::Hit,         Some(Chunk::Same(same)), Text::Lit(c), _)   => same.text.push(*c),
+                (StepKind::Hit,         _,                       Text::Lit(c), _)   => chunks.push(Chunk::new_same(*c)),
+                (StepKind::SkipText,    Some(Chunk::Diff(diff)), Text::Lit(c), _)   => diff.added.push(*c),
+                (StepKind::SkipText,    _,                       Text::Lit(c), _)   => chunks.push(Chunk::new_added(*c)),
+                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Lit(c))   => diff.taken.push(*c),
+                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Class(_)) => diff.taken.push(ANY),
+                (StepKind::SkipPattern, _,                       _, Patt::Lit(c))   => chunks.push(Chunk::new_taken(*c)),
+                (StepKind::SkipPattern, _,                       _, Patt::Class(_)) => chunks.push(Chunk::new_taken(ANY)),
                 _ => {},
             }
         }
@@ -119,6 +118,30 @@ mod tests {
     }
 
     #[test]
+    fn test_new_match_class_1() {
+        let test_case = TestCase::match_class_1();
+        let expected = "a";
+        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_new_match_class_2() {
+        let test_case = TestCase::match_class_2();
+        let expected = "a";
+        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_new_match_class_3() {
+        let test_case = TestCase::match_class_3();
+        let expected = "X";
+        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn test_new_match_kleene_1() {
         let test_case = TestCase::match_kleene_1();
         let expected = "aa";
@@ -130,6 +153,14 @@ mod tests {
     fn test_new_match_kleene_2() {
         let test_case = TestCase::match_kleene_2();
         let expected = "aababb";
+        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_new_match_kleene_3() {
+        let test_case = TestCase::match_kleene_3();
+        let expected = "0451";
         let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
@@ -170,6 +201,14 @@ mod tests {
     fn test_new_fail_lit_3() {
         let test_case = TestCase::fail_lit_3();
         let expected = "{+z+}ab[-cd-]{+k+}e";
+        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_new_fail_class_1() {
+        let test_case = TestCase::fail_class_1();
+        let expected = "[-?-]{+a+}";
         let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }

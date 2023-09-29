@@ -98,9 +98,9 @@ pub trait LatticeSolution : Sized {
         let mut steps = vec![];
 
         match (patt, text) {
-            (Patt::Any, Text::Lit(_)) =>
+            (Patt::Class(class), Text::Lit(c)) if class.matches(*c) =>
                 steps.push(ix.hit()),
-            (Patt::Lit(a), Text::Lit(b)) if a == b =>
+            (Patt::Lit(a), Text::Lit(b)) if *a == *b =>
                 steps.push(ix.hit()),
             _ =>
                 (),
@@ -114,7 +114,7 @@ pub trait LatticeSolution : Sized {
         }
 
         match patt {
-            Patt::Lit(_) | Patt::Any =>
+            Patt::Lit(_) | Patt::Class(_) =>
                 steps.push(ix.skip_patt()),
             Patt::GroupStart =>
                 steps.push(ix.start_group()),
@@ -234,12 +234,28 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::match_lit_2());
     }
 
+    pub fn test_solve_match_class_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_class_1());
+    }
+
+    pub fn test_solve_match_class_2<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_class_2());
+    }
+
+    pub fn test_solve_match_class_3<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_class_3());
+    }
+
     pub fn test_solve_match_kleene_1<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::match_kleene_1());
     }
 
     pub fn test_solve_match_kleene_2<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::match_kleene_2());
+    }
+
+    pub fn test_solve_match_kleene_3<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_kleene_3());
     }
 
     pub fn test_solve_fail_empty_1<Sln: LatticeSolution>() {
@@ -260,6 +276,10 @@ pub mod tests {
 
     pub fn test_solve_fail_lit_3<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::fail_lit_3());
+    }
+
+    pub fn test_solve_fail_class_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::fail_class_1());
     }
 
     pub fn test_solve_fail_kleene_1<Sln: LatticeSolution>() {

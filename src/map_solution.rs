@@ -169,6 +169,21 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_class_1() {
+        tests::test_solve_match_class_1::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_class_2() {
+        tests::test_solve_match_class_2::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_class_3() {
+        tests::test_solve_match_class_3::<MapSolution>();
+    }
+
+    #[test]
     fn test_solve_match_kleene_1() {
         tests::test_solve_match_kleene_1::<MapSolution>();
     }
@@ -176,6 +191,11 @@ mod tests {
     #[test]
     fn test_solve_match_kleene_2() {
         tests::test_solve_match_kleene_2::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_kleene_3() {
+        tests::test_solve_match_kleene_3::<MapSolution>();
     }
 
     #[test]
@@ -201,6 +221,11 @@ mod tests {
     #[test]
     fn test_solve_fail_lit_3() {
         tests::test_solve_fail_lit_3::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_fail_class_1() {
+        tests::test_solve_fail_class_1::<MapSolution>();
     }
 
     #[test]

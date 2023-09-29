@@ -58,7 +58,7 @@ impl Config {
 
         for (orig_ix, patt) in original.iter().enumerate() {
             match patt {
-                Patt::Lit(_) | Patt::Any | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
+                Patt::Lit(_) | Patt::Class(_) | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
                     for _ in 0..=kleene_depth {
                         expanded.push(patt.clone());
                         original_ix.push(orig_ix);
@@ -263,6 +263,21 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_class_1() {
+        tests::test_solve_match_class_1::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_class_2() {
+        tests::test_solve_match_class_2::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_class_3() {
+        tests::test_solve_match_class_3::<TableSolution>();
+    }
+
+    #[test]
     fn test_solve_match_kleene_1() {
         tests::test_solve_match_kleene_1::<TableSolution>();
     }
@@ -270,6 +285,11 @@ mod tests {
     #[test]
     fn test_solve_match_kleene_2() {
         tests::test_solve_match_kleene_2::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_kleene_3() {
+        tests::test_solve_match_kleene_3::<TableSolution>();
     }
 
     #[test]
@@ -292,11 +312,16 @@ mod tests {
         tests::test_solve_fail_lit_2::<TableSolution>();
     }
 
-
     #[test]
     fn test_solve_fail_lit_3() {
         tests::test_solve_fail_lit_3::<TableSolution>();
     }
+
+    #[test]
+    fn test_solve_fail_class_1() {
+        tests::test_solve_fail_class_1::<TableSolution>();
+    }
+
     #[test]
     fn test_solve_fail_kleene_1() {
         tests::test_solve_fail_kleene_1::<TableSolution>();
