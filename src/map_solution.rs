@@ -43,8 +43,8 @@ impl LatticeConfig<Ix> for Config {
         Config { problem: problem.clone() }
     }
 
-    fn get(&self, ix: Ix) -> (Patt, Text) {
-        (self.problem.pattern[ix.pix], self.problem.text[ix.tix])
+    fn get(&self, ix: Ix) -> (&Patt, &Text) {
+        (&self.problem.pattern[ix.pix], &self.problem.text[ix.tix])
     }
 
 }

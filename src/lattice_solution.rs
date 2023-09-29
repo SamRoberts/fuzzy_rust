@@ -121,12 +121,12 @@ pub trait LatticeSolution : Sized {
             Patt::GroupEnd =>
                 steps.push(ix.stop_group()),
             Patt::KleeneEnd(off) if ix.can_restart() =>
-                steps.push(ix.restart_kleene(off)),
+                steps.push(ix.restart_kleene(*off)),
             Patt::KleeneEnd(_) => // cannot restart
                 steps.push(ix.end_kleene()),
             Patt::KleeneStart(off) => {
                 steps.push(ix.start_kleene());
-                steps.push(ix.pass_kleene(off));
+                steps.push(ix.pass_kleene(*off));
             }
             Patt::End =>
                 (),
@@ -154,7 +154,7 @@ impl <Sln> Solution<Error> for Sln where
 
 pub trait LatticeConfig<Ix> {
     fn new(problem: &Problem) -> Self;
-    fn get(&self, ix: Ix) -> (Patt, Text);
+    fn get(&self, ix: Ix) -> (&Patt, &Text);
 }
 
 pub trait LatticeState<Conf, Ix> {

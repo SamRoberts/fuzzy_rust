@@ -22,13 +22,13 @@ pub trait Output : Display {
     fn new(problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Problem {
     pub pattern: Vec<Patt>,
     pub text: Vec<Text>,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Patt {
     Lit(char), // TODO modify to take bytes like regex library. For now assuming ascii
     Any,
@@ -39,7 +39,7 @@ pub enum Patt {
     End,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Text {
     Lit(char), // TODO modify to take bytes like regex library. For now assuming ascii
     End
