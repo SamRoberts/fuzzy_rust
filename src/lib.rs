@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use regex_syntax::hir;
 
 pub mod regex_question;
 pub mod lattice_solution;
@@ -30,13 +31,42 @@ pub struct Problem {
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Patt {
-    Lit(char), // TODO modify to take bytes like regex library. For now assuming ascii
-    Any,
+    Lit(char), // TODO regex library can take unicode or bytes. For now assuming ascii.
+    Class(Class),
     GroupStart,
     GroupEnd,
     KleeneStart(usize), // the offset of the end
     KleeneEnd(usize),   // the offset of the start
     End,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct Class {
+    // TODO switch to a hir-independant representation. For now, avoid using hir_class directly.
+    hir_class: hir::Class,
+}
+
+impl From<hir::Class> for Class {
+    fn from(hir_class: hir::Class) -> Class {
+        Class { hir_class }
+    }
+}
+
+impl Class {
+    fn matches(&self, c: char) -> bool {
+        match &self.hir_class {
+            hir::Class::Unicode(ranges) =>
+                ranges.iter().any(|range| range.start() <= c && c <= range.end()),
+            hir::Class::Bytes(ranges) =>
+                // TODO As in other places in the code, for now, we are treating the u8 vs char
+                // distinctiom by naively assuming all our text is ascii
+                ranges.iter().any(|range| {
+                    let start = range.start() as char;
+                    let end = range.end() as char;
+                    start <= c && c <= end
+                }),
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -68,6 +98,7 @@ pub enum StepKind {
 #[cfg(test)]
 pub mod test_cases {
     use super::*;
+    use regex_syntax::hir::HirKind;
 
     // A test case may or may not have a well defined trace
     pub struct TestCase<Trace> {
@@ -111,6 +142,45 @@ pub mod test_cases {
                 trace: vec![
                     Self::step(0, 0, 1, 1, 0, StepKind::Hit),
                     Self::step(1, 1, 2, 2, 0, StepKind::Hit),
+                ],
+            }
+        }
+
+        pub fn match_class_1() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![patt_class("."), Patt::End],
+                    text:    vec![Text::Lit('a'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                ],
+            }
+        }
+
+        pub fn match_class_2() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![patt_class("[a-zA-Z]"), Patt::End],
+                    text:    vec![Text::Lit('a'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                ],
+            }
+        }
+
+        pub fn match_class_3() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![patt_class("[a-zA-Z]"), Patt::End],
+                    text:    vec![Text::Lit('X'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
                 ],
             }
         }
@@ -180,6 +250,31 @@ pub mod test_cases {
                     Self::step(2, 6, 5, 6, 0, StepKind::NoOp),
                     Self::step(5, 6, 0, 6, 0, StepKind::NoOp),
                     Self::step(0, 6, 6, 6, 0, StepKind::NoOp),
+                ],
+            }
+        }
+
+        pub fn match_kleene_3() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![Patt::KleeneStart(2), patt_class("[0-9]"), Patt::KleeneEnd(2), Patt::End],
+                    text:    vec![Text::Lit('0'), Text::Lit('4'), Text::Lit('5'), Text::Lit('1'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
+                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
+                    Self::step(2, 1, 0, 1, 0, StepKind::NoOp),
+                    Self::step(0, 1, 1, 1, 0, StepKind::NoOp),
+                    Self::step(1, 1, 2, 2, 0, StepKind::Hit),
+                    Self::step(2, 2, 0, 2, 0, StepKind::NoOp),
+                    Self::step(0, 2, 1, 2, 0, StepKind::NoOp),
+                    Self::step(1, 2, 2, 3, 0, StepKind::Hit),
+                    Self::step(2, 3, 0, 3, 0, StepKind::NoOp),
+                    Self::step(0, 3, 1, 3, 0, StepKind::NoOp),
+                    Self::step(1, 3, 2, 4, 0, StepKind::Hit),
+                    Self::step(2, 4, 0, 4, 0, StepKind::NoOp),
+                    Self::step(0, 4, 3, 4, 0, StepKind::NoOp),
                 ],
             }
         }
@@ -259,6 +354,21 @@ pub mod test_cases {
             }
         }
 
+        pub fn fail_class_1() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![patt_class("[^a]"), Patt::End],
+                    text:    vec![Text::Lit('a'), Text::End],
+                },
+                score: 2,
+                trace: vec![
+                    // TODO handle valid possibility that the order of next two steps is reversed
+                    Self::step(0, 0, 0, 1, 2, StepKind::SkipText),
+                    Self::step(0, 1, 1, 1, 1, StepKind::SkipPattern),
+                ],
+            }
+        }
+
         fn step(from_patt: usize, from_text: usize, to_patt: usize, to_text: usize, score: usize, kind: StepKind) -> Step {
             Step { from_patt, from_text, to_patt, to_text, score, kind }
         }
@@ -277,5 +387,14 @@ pub mod test_cases {
                 trace: (),
             }
         }
+    }
+
+    pub fn patt_class(regex: &str) -> Patt {
+        let wildcard_class = match regex_syntax::parse(regex).unwrap().into_kind() {
+            HirKind::Class(c) => c,
+            unsupported => panic!("Unexpected regex_syntax for class: {:?}", unsupported),
+        };
+
+        Patt::Class(Class::from(wildcard_class))
     }
 }

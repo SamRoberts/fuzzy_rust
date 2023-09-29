@@ -1,6 +1,6 @@
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
-use crate::{Patt, Problem, Question, Text};
+use crate::{Class, Patt, Problem, Question, Text};
 use crate::error::Error;
 
 pub struct RegexQuestion {
@@ -33,11 +33,6 @@ impl RegexQuestion {
     }
 
     fn parse_impl(hir: &Hir, items: &mut Vec<Patt>) -> Result<usize, Error> {
-        let wildcard_class = match regex_syntax::parse(".")?.into_kind() {
-            HirKind::Class(c) => Ok(c),
-            unsupported => Err(Error::UnexpectedRegexRepr(format!("{:?}", unsupported))),
-        }?;
-
         match hir.kind() {
             HirKind::Literal(Literal(ref bytes)) => {
                 // TODO modify Patt::Lit to use bytes rather then chars. For now, assuming ascii
@@ -46,8 +41,8 @@ impl RegexQuestion {
                 }
                 Ok(bytes.len())
             }
-            HirKind::Class(class) if *class == wildcard_class => {
-                items.push(Patt::Any);
+            HirKind::Class(class) => {
+                items.push(Patt::Class(Class::from(class.clone())));
                 Ok(1)
             }
             HirKind::Capture(Capture { sub, .. }) => {
@@ -82,6 +77,7 @@ impl RegexQuestion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_cases::patt_class;
 
     #[test]
     fn parse_lit_1() {
@@ -95,12 +91,12 @@ mod tests {
 
     #[test]
     fn parse_wildcard() {
-        parse_test(".", vec![Patt::Any]);
+        parse_test(".", vec![patt_class(".")])
     }
 
     #[test]
     fn parse_concat_1() {
-        parse_test("a.", vec![Patt::Lit('a'), Patt::Any]);
+        parse_test("a.", vec![Patt::Lit('a'), patt_class(".")]);
     }
 
     #[test]
@@ -125,5 +121,4 @@ mod tests {
         let actual_pattern = RegexQuestion::parse_pattern(&pattern).expect("Cannot parse pattern");
         assert_eq!(expected_pattern, actual_pattern);
     }
-
 }
