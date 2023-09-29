@@ -1,0 +1,14 @@
+\[package\]
+name = "[^\n\"]*"
+version = "[^\n\"]*"
+authors = \[("[^\n\"].*", )*"[^\n\"].*"\]
+edition = "[0-9][0-9][0-9][0-9]"
+description = "[^\n\"]*"
+readme = "README.md"
+license = "[^\n\"]*"
+repository = "https://github.com/[^\n\"/]*/[^\n\"]*"
+homepage = "https://github.com/[^\n\"/]*/[^\n\"]*"
+
+\[dependencies\]
+([^\n]* = [^\n]*
+)*
