@@ -1,5 +1,6 @@
 use crate::{Output, Patt, Problem, Step, StepKind, Text};
 use std::fmt;
+use std::ops::Index;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
 // for now. Instead, we will mimic the git diff format, expect we print out all matching
@@ -47,14 +48,14 @@ impl Output for DiffOutput {
         let mut chunks = vec![];
         for step in trace.iter() {
             let current_chunk = chunks.last_mut();
-            match (step.kind, current_chunk, problem.text[step.from_text], problem.pattern[step.from_patt]) {
-                (StepKind::Hit,         Some(Chunk::Same(same)), Text::Lit(c), _) => same.text.push(c),
-                (StepKind::Hit,         _,                       Text::Lit(c), _) => chunks.push(Chunk::new_same(c)),
-                (StepKind::SkipText,    Some(Chunk::Diff(diff)), Text::Lit(c), _) => diff.added.push(c),
-                (StepKind::SkipText,    _,                       Text::Lit(c), _) => chunks.push(Chunk::new_added(c)),
-                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Lit(c)) => diff.taken.push(c),
+            match (step.kind, current_chunk, problem.text.index(step.from_text), problem.pattern.index(step.from_patt)) {
+                (StepKind::Hit,         Some(Chunk::Same(same)), Text::Lit(c), _) => same.text.push(*c),
+                (StepKind::Hit,         _,                       Text::Lit(c), _) => chunks.push(Chunk::new_same(*c)),
+                (StepKind::SkipText,    Some(Chunk::Diff(diff)), Text::Lit(c), _) => diff.added.push(*c),
+                (StepKind::SkipText,    _,                       Text::Lit(c), _) => chunks.push(Chunk::new_added(*c)),
+                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Lit(c)) => diff.taken.push(*c),
                 (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Any)    => diff.taken.push(ANY),
-                (StepKind::SkipPattern, _,                       _, Patt::Lit(c)) => chunks.push(Chunk::new_taken(c)),
+                (StepKind::SkipPattern, _,                       _, Patt::Lit(c)) => chunks.push(Chunk::new_taken(*c)),
                 (StepKind::SkipPattern, _,                       _, Patt::Any)    => chunks.push(Chunk::new_taken(ANY)),
                 _ => {},
             }

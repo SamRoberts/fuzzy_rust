@@ -42,8 +42,8 @@ impl LatticeConfig<Ix> for Config {
         }
     }
 
-    fn get(&self, ix: Ix) -> (Patt, Text) {
-        (self.expanded_pattern[ix.pattern], self.text[ix.text])
+    fn get(&self, ix: Ix) -> (&Patt, &Text) {
+        (&self.expanded_pattern[ix.pattern], &self.text[ix.text])
     }
 
 }
@@ -60,7 +60,7 @@ impl Config {
             match patt {
                 Patt::Lit(_) | Patt::Any | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
                     for _ in 0..=kleene_depth {
-                        expanded.push(*patt);
+                        expanded.push(patt.clone());
                         original_ix.push(orig_ix);
                     }
                 },
