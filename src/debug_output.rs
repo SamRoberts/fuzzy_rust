@@ -1,3 +1,5 @@
+//! Provides an implementation of [`Output`] suitable for development.
+
 use crate::{Output, Problem, Step};
 use std::fmt;
 

@@ -1,3 +1,5 @@
+//! Provides the [`enum@Error`] type currently used by all fuzzy code.
+
 use thiserror::Error;
 use std::io;
 

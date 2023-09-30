@@ -1,3 +1,9 @@
+//! A theoretically faster implementation of [`Solution`](crate::Solution).
+//!
+//! This implementation pre-allocates a [vector](State) storing state for all [nodes](Ix), so in
+//! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
+//! do these in the future.
+
 use crate::{Patt, Problem, Step, StepKind, Text};
 use crate::lattice_solution::{Done, LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 
@@ -25,11 +31,19 @@ impl LatticeSolution for TableSolution {
     }
 }
 
+/// Stores the text and pattern from the original [`Problem`](crate::Problem).
+///
+/// Because of the ["kleene depth"](Ix::kleene_depth_this_text) concept, we need to expand the
+/// original pattern to include extra nodes for pattern elements inside kleene groups.
+///
+/// ```ignore
+/// Original pattern: abc(d e f (g  h  i  )*j k l )*mno
+/// Expanded pattern: abc(ddeeff(ggghhhiii)*jjkkll)*mno
+/// ```
 pub struct Config {
-    // TODO reconsider need to store a copy of Patt for every index in expanded pattern space
     text: Vec<Text>,
     expanded_pattern: Vec<Patt>,
-    original_pattern_ix: Vec<usize>, // the original ix for each element in expanded_pattern
+    original_pattern_ix: Vec<usize>,
 }
 
 impl LatticeConfig<Ix> for Config {
@@ -123,11 +137,28 @@ impl LatticeState<Config, Ix> for State {
     }
 }
 
+/// Indexes into [`State`].
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
+    /// The index into [`Config`] text vector.
     pub text: usize,
-    pub pattern: usize, // initial corresponding index in expanded pattern space
+    /// The index into [`Config`] expanded pattern.
+    ///
+    /// Note that this always points to the first element in the expanded pattern. We use
+    /// [`Ix::kleene_depth_this_text`] to increment the index appropriately for other elements.
+    pub pattern: usize,
+    /// This field tracks the number of places in the expanded pattern for our current element.
+    ///
+    /// When we move from one pattern element to the next we increment [`Ix::pattern`] by this amount.
     pub kleene_depth: usize,
+    /// This field represents our "kleene depth since we last changed text index".
+    ///
+    /// To avoid infinite loops, we have to avoid repeating a kleene group if that would take us
+    /// back to the same index we started at. We keep track of how many kleene groups we entered
+    /// since we last matched or skipped a text character, and avoid looping back unless this is 0.
+    /// This ix the "kleene depth". Because the "kleene depth" affects future jumps, it also
+    /// affects the future score, and so we have a separate score and a separate index for each
+    /// kleene depth value.
     pub kleene_depth_this_text: usize,
 }
 

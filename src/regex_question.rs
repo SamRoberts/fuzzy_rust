@@ -1,3 +1,10 @@
+//! An implementation of [`Question`](crate::Question) that parses the pattern using
+//! [`regex_syntax`](https://docs.rs/regex-syntax).
+//!
+//! [`regex_syntax`](https://docs.rs/regex-syntax) sometimes uses bytes in their API, while this
+//! crate currently operates on unicode characters. For now, we are getting around this by naively
+//! assuming all characters are ASCII. We will change this in the future.
+
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
 use crate::{Class, Patt, Problem, Question, Text};
