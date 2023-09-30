@@ -1,33 +1,40 @@
+//! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
+
 use crate::{Patt, Problem, Solution, Step, StepKind, Text};
 use crate::error::Error;
 use std::fmt::Debug;
 
-// An initial naively recursive family of lattice solutions
-//
-// Implementations define a mutable state space
-// and an index type that addresses it.
-//
-// Each index has a set of child indices that it can reach
-// by matching the text to the pattern, or skipping one or
-// the other. These links form a lattice. The implementation
-// must ensure that Ix::can_restart is implemented correctly
-// so that there are no loops in the lattice. All paths
-// through the lattice begin at Ix::start and end at Ix::end.
-//
-// The solve method in this code traverses the state space by
-// naively recursing from each node to it's child nodes,
-// stopping when it reaches the end node.
-
-pub trait LatticeSolution : Sized {
+/// A naive family of "recurse through a lattice" [`Solution`] implementations.
+///
+/// [`LatticeSolution`] implementations get [`Solution::solve`] defined automatically. Instead,
+/// implementations are required to specify a mutable [`State`](LatticeSolution::State) space
+/// and an [`Ix`](LatticeSolution::Ix) type which addresses it.
+///
+/// Each index links to child indices which represent the next possible steps we can take to match
+/// the pattern to the text (e.g. match a character, skip a character from the text or pattern,
+/// etc.). There is a defined [`start`](LatticeIx::start) index, when no progress has been made,
+/// and an [`end`](LatticeIx::end) index, when both the entire pattern and text have been matched.
+/// Implementation must ensure that [`can_restart`](LatticeIx::can_restart) is implemented
+/// correctly, so that these links never form a loop. These links form a
+/// [lattice](https://en.wikipedia.org/wiki/Lattice_(order)).
+///
+/// [`LatticeSolution`] implements [`Solution::solve`] by naively recursing through this lattice,
+/// recording the optimal score for each index in [`State`](LatticeSolution::State) as it goes.
+pub trait LatticeSolution : Sized  + Solution<Error> {
+    /// Carries immutable information derived from the [`Problem`](crate::Problem) being solved.
     type Conf: LatticeConfig<Self::Ix>;
-    type Ix: LatticeIx<Self::Conf>;
+    /// Mutable state being updated while solving.
     type State: LatticeState<Self::Conf, Self::Ix>;
+    /// The type used to index into [`State`](LatticeSolution::State) and
+    /// [`Conf`](LatticeSolution::Conf).
+    type Ix: LatticeIx<Self::Conf>;
 
     fn new(score: usize, trace: Vec<Step>) -> Self;
 
     fn score_lattice(&self) -> &usize;
     fn trace_lattice(&self) -> &Vec<Step>;
 
+    /// [`Solution::solve`] implementation.
     fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
@@ -58,6 +65,10 @@ pub trait LatticeSolution : Sized {
         Ok(LatticeSolution::new(score, trace))
     }
 
+    /// Update [`State`](LatticeSolution::State) with the optimal steps from the current
+    /// [`Ix`](LatticeSolution::Ix) onwards.
+    ///
+    /// `lead` is the step taken to arrive at the [`Ix`](LatticeSolution::Ix) we are solving.
     fn solve_ix(
         conf: &Self::Conf,
         state: &mut Self::State,

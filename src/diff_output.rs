@@ -1,3 +1,5 @@
+//! Provides an implementation of [`Output`] that mimics git's character-level diff.
+
 use crate::{Output, Patt, Problem, Step, StepKind, Text};
 use std::fmt;
 
@@ -39,6 +41,10 @@ impl Chunk {
 #[derive(Eq, PartialEq, Debug)]
 struct Same { text: Vec<char> }
 
+/// This structure records consecutive characters skipped in either the text or pattern.
+///
+/// It's not necesary to remember the particular order these characters were skipped, and we get
+/// nicer output if we consolidate them like this.
 #[derive(Eq, PartialEq, Debug)]
 struct Diff { taken: Vec<char>, added: Vec<char> }
 

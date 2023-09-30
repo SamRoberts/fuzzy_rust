@@ -1,14 +1,11 @@
+//! An implementation of [`Solution`](crate::Solution) that should be relatively easy to develop new features for.
+//!
+//! This implementation uses a [map](State) to store state for each [node](Ix), so it should be
+//! easy to change node representation and expand the state space over time.
+
 use crate::{Patt, Problem, Step, StepKind, Text};
 use crate::lattice_solution::{Done, LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 use std::collections::hash_map::HashMap;
-
-// Initial naive attempt
-// Takes hashmap from simple scala implementation as well as recursive traversal
-// but representation of nodes and edges more from loop
-
-// It won't be syntactically possible to interleave kleene ranges with group ranges
-// And the parser will ensure that all groups are balanced
-// So our algorithm does not have to worry about having more "starts" than "ends"
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct MapSolution {
@@ -72,9 +69,20 @@ impl LatticeState<Config, Ix> for State {
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
-    // TODO let's change these ix names later ...
+    /// The index into [`Problem::pattern`](crate::Problem::pattern).
+    ///
+    /// We will change these field names in the future!
     pub pix: usize,
+    /// The index into [`Problem::text`](crate::Problem::text).
     pub tix: usize,
+    /// This field represents our "kleene depth since we last changed text index".
+    ///
+    /// To avoid infinite loops, we have to avoid repeating a kleene group if that would take us
+    /// back to the same index we started at. We keep track of how many kleene groups we entered
+    /// since we last matched or skipped a text character, and avoid looping back unless this is 0.
+    /// This ix the "kleene depth". Because the "kleene depth" affects future jumps, it also
+    /// affects the future score, and so we have a separate score and a separate index for each
+    /// kleene depth value.
     pub kix: usize,
 }
 
