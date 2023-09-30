@@ -173,6 +173,6 @@ lines rather then individual characters.
 
 Overall, I believe Fuzzy still needs substantial feature development before it
 can interrogate generated code. It should be more useful on boilerplate text
-files, which often don't have as much structure as code or configuration.
+files which don't have as much structure.
 
 [Scala fuzzy]: https://github.com/SamRoberts/fuzzy/
