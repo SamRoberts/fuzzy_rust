@@ -74,12 +74,12 @@ current output does not display this.
 Practical uses of Fuzzy
 -----------------------
 
-The Fuzzy tool was originally created to help understand tens of thousands of
-generated code files which had been created from different versions of
-different templates with different parameters over time, and subsequently
-modified manually. The goal was to discover which template each code file was
-closest to, recover the original parameters, and identify what had been
-changed.
+The Fuzzy tool was originally inspired by a scenario where we had to deal with
+tens of thousands of generated code files which had been created from different
+versions of different templates with different parameters over time, and
+subsequently modified manually. Once complete, fuzzy should be useful in
+similar situations: discover which template files are closest to, guess the
+original parameters, and highlight later changes.
 
 Fuzzy needs more pattern features to handle this use case.
 
