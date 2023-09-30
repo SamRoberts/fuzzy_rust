@@ -35,7 +35,8 @@ pub trait LatticeSolution : Sized {
         let start_ix = Self::Ix::start();
         let end_ix = Self::Ix::end(&conf);
 
-        let _ = Self::solve_ix(&conf, &mut state, end_ix, start_ix, 0, StepKind::NoOp)?;
+        let start_lead = Next { cost: 0, next: start_ix, kind: StepKind::NoOp };
+        let _ = Self::solve_ix(&conf, &mut state, end_ix, start_lead);
 
         let score = match state.get(start_ix) {
             Node::Done(Done { score, .. }) => Ok(score),
@@ -61,10 +62,10 @@ pub trait LatticeSolution : Sized {
         conf: &Self::Conf,
         state: &mut Self::State,
         end_ix: Self::Ix,
-        ix: Self::Ix,
-        cost: usize,
-        kind: StepKind,
+        lead: Next<Self::Ix>,
      ) -> Result<Done<Self::Ix>, Error> {
+        let Next { cost, kind, next: ix } = lead; // the step's lead is our current ix
+
         match state.get(ix) {
             Node::Working =>
                 Err(Error::InfiniteLoop(format!("{:?}", ix))),
@@ -72,19 +73,70 @@ pub trait LatticeSolution : Sized {
                 Ok(Done { score: done.score + cost, next: ix, kind }),
             Node::Ready => {
                 state.set(ix, Node::Working);
-                let steps = Self::succ(conf, ix);
 
-                let maybe_score = steps.iter()
-                    .map(|step| Self::solve_ix(conf, state, end_ix, step.next, step.cost, step.kind))
-                    .reduce(Done::combine_result);
+                let mut maybe_score = None;
+                let (patt, text) = conf.get(ix);
 
-                let score = maybe_score.unwrap_or_else(|| {
-                    if ix == end_ix {
-                        Ok(Done { score: 0, next: end_ix, kind: StepKind::NoOp })
-                    } else {
-                        Err(Error::Blocked(format!("{:?}", ix)))
+                match (patt, text) {
+                    (Patt::Class(class), Text::Lit(c)) if class.matches(*c) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.hit())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    (Patt::Lit(a), Text::Lit(b)) if *a == *b => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.hit())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    _ =>
+                        (),
+                }
+
+                match text {
+                    Text::Lit(_) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.skip_text())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Text::End =>
+                        (),
+                }
+
+                match patt {
+                    Patt::Lit(_) | Patt::Class(_) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.skip_patt())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::GroupStart => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.start_group())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::GroupEnd => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.stop_group())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::KleeneEnd(off) if ix.can_restart() => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.restart_kleene(*off))?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::KleeneEnd(_) => { // cannot restart
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.end_kleene())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::KleeneStart(off) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.start_kleene())?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                        let outcome = Self::solve_ix(conf, state, end_ix, ix.pass_kleene(*off))?;
+                        maybe_score = Self::update(maybe_score, outcome);
                     }
-                })?;
+                    Patt::End =>
+                        (),
+                }
+
+                let score = match maybe_score {
+                    Some(score) => score,
+                    None if ix == end_ix =>
+                        Done { score: 0, next: end_ix, kind: StepKind::NoOp },
+                    None =>
+                        return Err(Error::Blocked(format!("{:?}", ix))),
+                };
 
                 state.set(ix, Node::Done(score));
                 Ok(Done { score: score.score + cost, next: ix, kind })
@@ -92,47 +144,8 @@ pub trait LatticeSolution : Sized {
         }
     }
 
-    fn succ(conf: &Self::Conf, ix: Self::Ix) -> Vec<Next<Self::Ix>> {
-        let (patt, text) = conf.get(ix);
-
-        let mut steps = vec![];
-
-        match (patt, text) {
-            (Patt::Class(class), Text::Lit(c)) if class.matches(*c) =>
-                steps.push(ix.hit()),
-            (Patt::Lit(a), Text::Lit(b)) if *a == *b =>
-                steps.push(ix.hit()),
-            _ =>
-                (),
-        }
-
-        match text {
-            Text::Lit(_) =>
-                steps.push(ix.skip_text()),
-            Text::End =>
-                (),
-        }
-
-        match patt {
-            Patt::Lit(_) | Patt::Class(_) =>
-                steps.push(ix.skip_patt()),
-            Patt::GroupStart =>
-                steps.push(ix.start_group()),
-            Patt::GroupEnd =>
-                steps.push(ix.stop_group()),
-            Patt::KleeneEnd(off) if ix.can_restart() =>
-                steps.push(ix.restart_kleene(*off)),
-            Patt::KleeneEnd(_) => // cannot restart
-                steps.push(ix.end_kleene()),
-            Patt::KleeneStart(off) => {
-                steps.push(ix.start_kleene());
-                steps.push(ix.pass_kleene(*off));
-            }
-            Patt::End =>
-                (),
-        }
-
-        steps
+    fn update(current: Option<Done<Self::Ix>>, new: Done<Self::Ix>) -> Option<Done<Self::Ix>> {
+        Some(current.map_or(new, |c| Done::optimal(c, new)))
     }
 }
 
@@ -197,15 +210,7 @@ pub struct Done<Ix: Sized> {
 }
 
 impl <Ix: Sized> Done<Ix> {
-    fn combine_result<E>(left: Result<Self, E>, right: Result<Self, E>) -> Result<Self, E> {
-        match (left, right) {
-            (Ok(l), Ok(r)) => Ok(Self::combine(l, r)),
-            (Err(l), _)    => Err(l),
-            (_, Err(r))    => Err(r),
-        }
-    }
-
-    fn combine(left: Self, right: Self) -> Self {
+    fn optimal(left: Self, right: Self) -> Self {
         if left.score <= right.score { left } else { right }
     }
 }
