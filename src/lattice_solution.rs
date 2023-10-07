@@ -123,6 +123,16 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.stop_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
+                    Patt::AlternativeLeft(off) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_left(ix))?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_right(ix, *off))?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
+                    Patt::AlternativeRight(off) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_right(ix, *off))?;
+                        maybe_score = Self::update(maybe_score, outcome);
+                    },
                     Patt::KleeneEnd(off) if ix.can_restart() => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_kleene(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
@@ -188,6 +198,9 @@ pub trait LatticeConfig<Ix> {
     fn hit(&self, ix: Ix) -> Next<Ix>;
     fn start_group(&self, ix: Ix) -> Next<Ix>;
     fn stop_group(&self, ix: Ix) -> Next<Ix>;
+    fn start_left(&self, ix: Ix) -> Next<Ix>;
+    fn start_right(&self, ix: Ix, off: usize) -> Next<Ix>;
+    fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix>;
     fn start_kleene(&self, ix: Ix) -> Next<Ix>;
     fn end_kleene(&self, ix: Ix) -> Next<Ix>;
     fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix>;
@@ -262,6 +275,18 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::match_class_3());
     }
 
+    pub fn test_solve_match_alternative_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_alternative_1());
+    }
+
+    pub fn test_solve_match_alternative_2<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_alternative_2());
+    }
+
+    pub fn test_solve_match_alternative_3<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_alternative_3());
+    }
+
     pub fn test_solve_match_kleene_1<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::match_kleene_1());
     }
@@ -296,6 +321,10 @@ pub mod tests {
 
     pub fn test_solve_fail_class_1<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::fail_class_1());
+    }
+
+    pub fn test_solve_fail_alternative_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::fail_alternative_1());
     }
 
     pub fn test_solve_fail_kleene_1<Sln: LatticeSolution>() {

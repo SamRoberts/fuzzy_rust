@@ -132,6 +132,33 @@ impl LatticeConfig<Ix> for Config {
         Next { cost: 0, next, kind: StepKind::StopCapture }
     }
 
+    fn start_left(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth + 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + off + 1,
+            node: ix.node + self.expanded_offsets[ix.pattern] + ix.kleene_depth + 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + off,
+            node: ix.node + self.expanded_offsets[ix.pattern],
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
     fn start_kleene(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
             pattern: ix.pattern + 1,
@@ -180,33 +207,57 @@ impl Config {
     }
 
     fn expand(original: &Vec<Patt>) -> (usize, Vec<usize>) {
-        let mut len = 0;
-        let mut starts = vec![];
-        let mut offsets = vec![];
+        // This is the most horrible code. It would be a lot easier with a hierarachical pattern
+        // representation.
+        let mut len_expand = 0;
+        let mut kleene_starts = vec![];
+        let mut alternative_lefts = vec![];
+        let mut alternative_rights = vec![];
+        let mut offsets_expand = vec![];
 
         for (patt_ix, patt) in original.iter().enumerate() {
+            if let Some((right_patt, right_expand, end_patt)) = alternative_rights.last() {
+                if patt_ix == *end_patt {
+                    let offset = len_expand - *right_expand;
+                    offsets_expand[*right_patt] = offset;
+                    alternative_rights.pop();
+                }
+            }
+
             match patt {
                 Patt::Lit(_) | Patt::Class(_) | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
-                    len += starts.len() + 1;
-                    offsets.push(0);
+                    len_expand += kleene_starts.len() + 1;
+                    offsets_expand.push(0);
+                },
+                Patt::AlternativeLeft(_) => {
+                    alternative_lefts.push((patt_ix, len_expand));
+                    len_expand += kleene_starts.len() + 1;
+                    offsets_expand.push(0); // will modify once we know where right branch is
+                },
+                Patt::AlternativeRight(off) => {
+                    alternative_rights.push((patt_ix, len_expand, patt_ix + off));
+                    let (left_patt, left_expand) = alternative_lefts.pop().unwrap();
+                    let offset = len_expand - left_expand;
+                    len_expand += kleene_starts.len() + 1;
+                    offsets_expand[left_patt] = offset;
+                    offsets_expand.push(0); // will modify once we know where end is
                 },
                 Patt::KleeneStart(_) => {
-                    starts.push((patt_ix, len));
-                    len += starts.len();
-                    offsets.push(0); // will modify once we know where end is
+                    kleene_starts.push((patt_ix, len_expand));
+                    len_expand += kleene_starts.len();
+                    offsets_expand.push(0); // will modify once we know where end is
                 },
                 Patt::KleeneEnd(_) => {
-                    let (start_patt, start_expand) = starts.pop().unwrap();
-                    let end_expand = len;
-                    let offset = end_expand - start_expand;
-                    len += starts.len() + 2;
-                    offsets[start_patt] = offset;
-                    offsets.push(offset);
+                    let (start_patt, start_expand) = kleene_starts.pop().unwrap();
+                    let offset = len_expand - start_expand;
+                    len_expand += kleene_starts.len() + 2;
+                    offsets_expand[start_patt] = offset;
+                    offsets_expand.push(offset);
                 },
             }
         }
 
-        (len, offsets)
+        (len_expand, offsets_expand)
     }
 }
 
@@ -254,7 +305,6 @@ pub struct Ix {
 }
 
 impl LatticeIx<Config> for Ix {
-
     fn can_restart(&self) -> bool {
         self.kleene_depth_this_text == 0
     }
@@ -307,6 +357,21 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_alternative_1() {
+        tests::test_solve_match_alternative_1::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_alternative_2() {
+        tests::test_solve_match_alternative_2::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_alternative_3() {
+        tests::test_solve_match_alternative_3::<TableSolution>();
+    }
+
+    #[test]
     fn test_solve_match_kleene_1() {
         tests::test_solve_match_kleene_1::<TableSolution>();
     }
@@ -349,6 +414,11 @@ mod tests {
     #[test]
     fn test_solve_fail_class_1() {
         tests::test_solve_fail_class_1::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_fail_alternative_1() {
+        tests::test_solve_fail_alternative_1::<TableSolution>();
     }
 
     #[test]

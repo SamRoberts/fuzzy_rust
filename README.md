@@ -34,6 +34,7 @@ moment:
 - literals: `abc`, `\(abc\)`
 - wildcards: `.`
 - character ranges: `[abc]`, `[a-zA-Z]`, `[^123]`
+- alternatives: `ab|cd`, `code: [A-Z]|quantity: [0-9]`
 - zero or more repetitions: `a*`, `.(,.)*`
 - nesting: `(ab*)*`, `(<([0-9]*,)*[0-9]*> )*<([0-9]*,)*[0-9]*>`
 
@@ -51,15 +52,14 @@ $ fuzzy -i '\([a-z0-9]*\)' '(1st place)'
 
 $ fuzzy -i '(<([0-9]*,)*[0-9]*> )*<([0-9]*,)*[0-9]*>' '<12,34,56> <789> <'
 <12,34,56> <789> <[->-]
+
+$ fuzzy -i '((title: [a-zA-Z ]*|salary: \$[0-9]*|name: [a-zA-Z ]*), )*' 'name: Andrew Ant, salary: 100,000'
+name: Andrew Ant, salary: [-$-]100{+,+}000[-, -]
 ```
 
-But fuzzy does not yet support other useful regex features, like alternation
-or bounded repetition:
+But fuzzy does not yet support other useful regex features, like bounded repetition:
 
 ```
-$ fuzzy -i 'ab|bc' ab
-Error: PatternUnsupported("Alternation([Literal(\"ab\"), Literal(\"bc\")])")
-
 $ fuzzy -i 'a+' a
 Error: PatternUnsupported("Repetition(Repetition { min: 1, max: None, greedy: true, sub: Literal(\"a\") })")
 
@@ -147,10 +147,8 @@ thiserror = "1.0.48"
 Fuzzy's optimal match has a number of issues.
 
 First, fuzzy does not recognise the `license` field, as it comes before
-repository in our pattern, but after in our cargo config. We have no way of
-telling fuzzy that `Cargo.toml` entries can be in any order. Supporting
-alternations would help, but ultimately fuzzy may need to move beyond regex
-features to handle this nicely.
+repository in our pattern, but after in our cargo config. We could redo our
+template using Fuzzy's new support for alternatives to get a better result.
 
 Next, Fuzzy uses the `repository` line pattern to reduce the cost of some extra
 lines in my `Cargo.toml` that come after `repository` but are not in the

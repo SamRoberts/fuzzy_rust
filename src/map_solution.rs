@@ -77,6 +77,21 @@ impl LatticeConfig<Ix> for Config {
         Next { cost: 0, next, kind: StepKind::StopCapture }
     }
 
+    fn start_left(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + off + 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + off, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
     fn start_kleene(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, kix: ix.kix + 1, ..ix };
         Next { cost: 0, next, kind: StepKind::NoOp }
@@ -192,6 +207,21 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_alternative_1() {
+        tests::test_solve_match_alternative_1::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_alternative_2() {
+        tests::test_solve_match_alternative_2::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_match_alternative_3() {
+        tests::test_solve_match_alternative_3::<MapSolution>();
+    }
+
+    #[test]
     fn test_solve_match_kleene_1() {
         tests::test_solve_match_kleene_1::<MapSolution>();
     }
@@ -234,6 +264,11 @@ mod tests {
     #[test]
     fn test_solve_fail_class_1() {
         tests::test_solve_fail_class_1::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_fail_alternative_1() {
+        tests::test_solve_fail_alternative_1::<MapSolution>();
     }
 
     #[test]
