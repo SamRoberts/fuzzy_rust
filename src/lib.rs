@@ -119,6 +119,15 @@ pub enum Patt {
     Class(Class),
     GroupStart,
     GroupEnd,
+    /// Starts the first branch of an alternation.
+    ///
+    /// This stores the offset between this item and the corresponding
+    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
+    AlternativeLeft(usize),
+    /// Starts the second branch of an alternation.
+    ///
+    /// This stores the offset between this item and the element immediately after the alternation.
+    AlternativeRight(usize),
     /// Starts a repetition.
     ///
     /// This stores the offset between this item and the corresponding future
@@ -309,6 +318,84 @@ pub mod test_cases {
             }
         }
 
+        pub fn match_alternative_1() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![
+                        Patt::AlternativeLeft(3),
+                        Patt::Lit('a'),
+                        Patt::Lit('b'),
+                        Patt::AlternativeRight(3),
+                        Patt::Lit('c'),
+                        Patt::Lit('d'),
+                        Patt::End
+                    ],
+                    text: vec![Text::Lit('a'), Text::Lit('b'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
+                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
+                    Self::step(2, 1, 3, 2, 0, StepKind::Hit),
+                    Self::step(3, 2, 6, 2, 0, StepKind::NoOp),
+                ],
+            }
+        }
+
+        pub fn match_alternative_2() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![
+                        Patt::AlternativeLeft(3),
+                        Patt::Lit('a'),
+                        Patt::Lit('b'),
+                        Patt::AlternativeRight(3),
+                        Patt::Lit('c'),
+                        Patt::Lit('d'),
+                        Patt::End
+                    ],
+                    text: vec![Text::Lit('c'), Text::Lit('d'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0, 0, 4, 0, 0, StepKind::NoOp),
+                    Self::step(4, 0, 5, 1, 0, StepKind::Hit),
+                    Self::step(5, 1, 6, 2, 0, StepKind::Hit),
+                ],
+            }
+        }
+
+        pub fn match_alternative_3() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![
+                        Patt::AlternativeLeft(2),
+                        Patt::Lit('a'),
+                        Patt::AlternativeRight(3),
+                        Patt::AlternativeLeft(2),
+                        Patt::Lit('b'),
+                        Patt::AlternativeRight(2),
+                        Patt::AlternativeLeft(2),
+                        Patt::Lit('c'),
+                        Patt::AlternativeRight(2),
+                        Patt::Lit('d'),
+                        Patt::Lit('z'),
+                        Patt::End
+                    ],
+                    text: vec![Text::Lit('c'), Text::Lit('z'), Text::End],
+                },
+                score: 0,
+                trace: vec![
+                    Self::step(0,  0, 3,  0, 0, StepKind::NoOp),
+                    Self::step(3,  0, 6,  0, 0, StepKind::NoOp),
+                    Self::step(6,  0, 7,  0, 0, StepKind::NoOp),
+                    Self::step(7,  0, 8,  1, 0, StepKind::Hit),
+                    Self::step(8,  1, 10, 1, 0, StepKind::NoOp),
+                    Self::step(10, 1, 11, 2, 0, StepKind::Hit),
+                ],
+            }
+        }
+
         pub fn match_kleene_1() -> Self {
             Self {
                 problem: Problem {
@@ -492,6 +579,32 @@ pub mod test_cases {
                 ],
             }
         }
+
+        pub fn fail_alternative_1() -> Self {
+            Self {
+                problem: Problem {
+                    pattern: vec![
+                        Patt::AlternativeLeft(3),
+                        Patt::Lit('a'),
+                        Patt::Lit('b'),
+                        Patt::AlternativeRight(3),
+                        Patt::Lit('c'),
+                        Patt::Lit('d'),
+                        Patt::End
+                    ],
+                    text: vec![Text::Lit('a'), Text::Lit('c'), Text::Lit('d'), Text::End],
+                },
+                score: 1,
+                trace: vec![
+                    // TODO handle valid possibility that the order of next two steps is reversed
+                    Self::step(0, 0, 0, 1, 1, StepKind::SkipText),
+                    Self::step(0, 1, 4, 1, 0, StepKind::NoOp),
+                    Self::step(4, 1, 5, 2, 0, StepKind::Hit),
+                    Self::step(5, 2, 6, 3, 0, StepKind::Hit),
+                ],
+            }
+        }
+
 
         fn step(from_patt: usize, from_text: usize, to_patt: usize, to_text: usize, score: usize, kind: StepKind) -> Step {
             Step { from_patt, from_text, to_patt, to_text, score, kind }
