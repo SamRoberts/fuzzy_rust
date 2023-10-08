@@ -44,6 +44,59 @@ impl LatticeConfig<Ix> for Config {
         (&self.problem.pattern[ix.pix], &self.problem.text[ix.tix])
     }
 
+    fn start(&self) -> Ix {
+        Ix { pix: 0, tix: 0, kix: 0 }
+    }
+
+    fn end(&self) -> Ix {
+        Ix { pix: self.problem.pattern.len() - 1, tix: self.problem.text.len() - 1, kix: 0 }
+    }
+
+    fn skip_text(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { tix: ix.tix + 1, kix: 0, ..ix };
+        Next { cost: 1, next, kind: StepKind::SkipText }
+    }
+
+    fn skip_patt(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, ..ix };
+        Next { cost: 1, next, kind: StepKind::SkipPattern }
+    }
+
+    fn hit(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, tix: ix.tix + 1, kix: 0, ..ix };
+        Next { cost: 0, next, kind: StepKind::Hit }
+    }
+
+    fn start_group(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::StartCapture }
+    }
+
+    fn stop_group(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::StopCapture }
+    }
+
+    fn start_kleene(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, kix: ix.kix + 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn end_kleene(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + 1, kix: ix.kix - 1, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix { pix: ix.pix + off + 1, ..ix};
+        Next { cost: 0, next, kind: StepKind::NoOp}
+    }
+
+    fn restart_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix { pix: ix.pix - off, ..ix };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
 }
 
 pub struct State {
@@ -87,59 +140,6 @@ pub struct Ix {
 }
 
 impl LatticeIx<Config> for Ix {
-    fn start() -> Self {
-        Self { pix: 0, tix: 0, kix: 0 }
-    }
-
-    fn end(conf: &Config) -> Self {
-        Self { pix: conf.problem.pattern.len() - 1, tix: conf.problem.text.len() - 1, kix: 0 }
-    }
-
-    fn skip_text(&self) -> Next<Self> {
-        let next = Ix { tix: self.tix + 1, kix: 0, ..*self };
-        Next { cost: 1, next, kind: StepKind::SkipText }
-    }
-
-    fn skip_patt(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, ..*self };
-        Next { cost: 1, next, kind: StepKind::SkipPattern }
-    }
-
-    fn hit(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, tix: self.tix + 1, kix: 0, ..*self };
-        Next { cost: 0, next, kind: StepKind::Hit }
-    }
-
-    fn start_group(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, ..*self };
-        Next { cost: 0, next, kind: StepKind::StartCapture }
-    }
-
-    fn stop_group(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, ..*self };
-        Next { cost: 0, next, kind: StepKind::StopCapture }
-    }
-
-    fn start_kleene(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, kix: self.kix + 1, ..*self };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
-    fn end_kleene(&self) -> Next<Self> {
-        let next = Ix { pix: self.pix + 1, kix: self.kix - 1, ..*self };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
-    fn pass_kleene(&self, off: usize) -> Next<Self> {
-        let next = Ix { pix: self.pix + off + 1, ..*self};
-        Next { cost: 0, next, kind: StepKind::NoOp}
-    }
-
-    fn restart_kleene(&self, off: usize) -> Next<Self> {
-        let next = Ix { pix: self.pix - off, ..*self };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
     fn can_restart(&self) -> bool {
         self.kix == 0
     }

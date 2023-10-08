@@ -12,8 +12,8 @@ use std::fmt::Debug;
 ///
 /// Each index links to child indices which represent the next possible steps we can take to match
 /// the pattern to the text (e.g. match a character, skip a character from the text or pattern,
-/// etc.). There is a defined [`start`](LatticeIx::start) index, when no progress has been made,
-/// and an [`end`](LatticeIx::end) index, when both the entire pattern and text have been matched.
+/// etc.). There is a defined [`start`](LatticeConfig::start) index, when no progress has been made,
+/// and an [`end`](LatticeConfig::end) index, when both the entire pattern and text have been matched.
 /// Implementation must ensure that [`can_restart`](LatticeIx::can_restart) is implemented
 /// correctly, so that these links never form a loop. These links form a
 /// [lattice](https://en.wikipedia.org/wiki/Lattice_(order)).
@@ -39,11 +39,11 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
 
-        let start_ix = Self::Ix::start();
-        let end_ix = Self::Ix::end(&conf);
+        let start_ix = conf.start();
+        let end_ix = conf.end();
 
         let start_lead = Next { cost: 0, next: start_ix, kind: StepKind::NoOp };
-        let _ = Self::solve_ix(&conf, &mut state, end_ix, start_lead);
+        let _ = Self::solve_ix(&conf, &mut state, end_ix, start_lead)?;
 
         let score = match state.get(start_ix) {
             Node::Done(Done { score, .. }) => Ok(score),
@@ -90,11 +90,11 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 
                 match (patt, text) {
                     (Patt::Class(class), Text::Lit(c)) if class.matches(*c) => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.hit())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     (Patt::Lit(a), Text::Lit(b)) if *a == *b => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.hit())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     _ =>
@@ -103,7 +103,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 
                 match text {
                     Text::Lit(_) => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.skip_text())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_text(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Text::End =>
@@ -112,29 +112,29 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 
                 match patt {
                     Patt::Lit(_) | Patt::Class(_) => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.skip_patt())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_patt(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Patt::GroupStart => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.start_group())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Patt::GroupEnd => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.stop_group())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.stop_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Patt::KleeneEnd(off) if ix.can_restart() => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.restart_kleene(*off))?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_kleene(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Patt::KleeneEnd(_) => { // cannot restart
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.end_kleene())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.end_kleene(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
                     Patt::KleeneStart(off) => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.start_kleene())?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_kleene(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
-                        let outcome = Self::solve_ix(conf, state, end_ix, ix.pass_kleene(*off))?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_kleene(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     }
                     Patt::End =>
@@ -179,6 +179,19 @@ impl <Sln> Solution<Error> for Sln where
 pub trait LatticeConfig<Ix> {
     fn new(problem: &Problem) -> Self;
     fn get(&self, ix: Ix) -> (&Patt, &Text);
+
+    fn start(&self) -> Ix;
+    fn end(&self) -> Ix;
+
+    fn skip_text(&self, ix: Ix) -> Next<Ix>;
+    fn skip_patt(&self, ix: Ix) -> Next<Ix>;
+    fn hit(&self, ix: Ix) -> Next<Ix>;
+    fn start_group(&self, ix: Ix) -> Next<Ix>;
+    fn stop_group(&self, ix: Ix) -> Next<Ix>;
+    fn start_kleene(&self, ix: Ix) -> Next<Ix>;
+    fn end_kleene(&self, ix: Ix) -> Next<Ix>;
+    fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix>;
+    fn restart_kleene(&self, ix: Ix, off: usize) -> Next<Ix>;
 }
 
 pub trait LatticeState<Conf, Ix> {
@@ -188,19 +201,6 @@ pub trait LatticeState<Conf, Ix> {
 }
 
 pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized {
-    fn start() -> Self;
-    fn end(conf: &Conf) -> Self;
-
-    fn skip_text(&self) -> Next<Self>;
-    fn skip_patt(&self) -> Next<Self>;
-    fn hit(&self) -> Next<Self>;
-    fn start_group(&self) -> Next<Self>;
-    fn stop_group(&self) -> Next<Self>;
-    fn start_kleene(&self) -> Next<Self>;
-    fn end_kleene(&self) -> Next<Self>;
-    fn pass_kleene(&self, off: usize) -> Next<Self>;
-    fn restart_kleene(&self, off: usize) -> Next<Self>;
-
     fn can_restart(&self) -> bool;
 
     fn to_step(conf: &Conf, from: &Self, done: &Done<Self>) -> Step;

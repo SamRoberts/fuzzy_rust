@@ -33,123 +33,214 @@ impl LatticeSolution for TableSolution {
 
 /// Stores the text and pattern from the original [`Problem`](crate::Problem).
 ///
-/// Because of the ["kleene depth"](Ix::kleene_depth_this_text) concept, we need to expand the
-/// original pattern to include extra nodes for pattern elements inside kleene groups.
+/// Our state stores an array of nodes. This array forms a table, with one dimension representing
+/// the text, while the other dimension represents an expanded pattern.
+///
+/// The pattern needs to be expanded because of the ["kleene depth"](Ix::kleene_depth_this_text)
+/// concept: we need extra nodes for pattern elements inside kleene groups. We don't actually need
+/// to store the expanded pattern, but we do need it's larger offsets and length.
 ///
 /// ```ignore
-/// Original pattern: abc(d e f (g  h  i  )*j k l )*mno
-/// Expanded pattern: abc(ddeeff(ggghhhiii)*jjkkll)*mno
+/// Original pattern: abc<d e f < g  h  i  >  j k l > mno, offsets: 12,  4,  4, and 12, length: 19
+/// Expanded pattern: abc<ddeeff<<ggghhhiii>>>jjkkll>>mno, offsets: 27, 11, 11, and 27, length: 35
+///
+/// (In this example, < and > represent the start and end of repetitions.)
 /// ```
 pub struct Config {
     text: Vec<Text>,
-    expanded_pattern: Vec<Patt>,
-    original_pattern_ix: Vec<usize>,
+    pattern: Vec<Patt>,
+    /// This array extends [`pattern`] elements with larger offsets for the expanded pattern.
+    expanded_offsets: Vec<usize>,
+    /// We also need to store the total length of the expanded pattern.
+    expanded_pattern_len: usize,
 }
 
 impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem) -> Self {
-        let (expanded_pattern, original_pattern_ix) = Self::expand_pattern(&problem.pattern);
+        let (expanded_pattern_len, expanded_offsets) = Self::expand(&problem.pattern);
         Config {
             text: problem.text.clone(),
-            expanded_pattern,
-            original_pattern_ix,
+            pattern: problem.pattern.clone(),
+            expanded_offsets,
+            expanded_pattern_len,
         }
     }
 
     fn get(&self, ix: Ix) -> (&Patt, &Text) {
-        (&self.expanded_pattern[ix.pattern], &self.text[ix.text])
+        (&self.pattern[ix.pattern], &self.text[ix.text])
     }
 
+    fn start(&self) -> Ix {
+        Ix { text: 0, pattern: 0, node: 0, kleene_depth: 0, kleene_depth_this_text: 0 }
+    }
+
+    fn end(&self) -> Ix {
+        Ix {
+            text: self.text.len() - 1,
+            pattern: self.pattern.len() - 1,
+            node: self.num_nodes() - 1,
+            kleene_depth: 0,
+            kleene_depth_this_text: 0,
+        }
+    }
+
+    fn skip_text(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            text: ix.text + 1,
+            node: ix.node + self.expanded_pattern_len - ix.kleene_depth_this_text,
+            kleene_depth_this_text: 0,
+            ..ix
+        };
+        Next { cost: 1, next, kind: StepKind::SkipText }
+    }
+
+    fn skip_patt(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth + 1,
+            ..ix
+        };
+        Next { cost: 1, next, kind: StepKind::SkipPattern }
+    }
+
+    fn hit(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            text: ix.text + 1,
+            pattern: ix.pattern + 1,
+            node: ix.node + self.expanded_pattern_len + ix.kleene_depth + 1 - ix.kleene_depth_this_text,
+            kleene_depth_this_text: 0,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::Hit }
+    }
+
+    fn start_group(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth + 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::StartCapture }
+    }
+
+    fn stop_group(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth + 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::StopCapture }
+    }
+
+    fn start_kleene(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth + 2,
+            kleene_depth: ix.kleene_depth + 1,
+            kleene_depth_this_text: ix.kleene_depth_this_text + 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn end_kleene(&self, ix: Ix) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + 1,
+            node: ix.node + ix.kleene_depth,
+            kleene_depth: ix.kleene_depth - 1,
+            kleene_depth_this_text: ix.kleene_depth_this_text - 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
+
+    fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern + off + 1,
+            node: ix.node + self.expanded_offsets[ix.pattern] + ix.kleene_depth + 2,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp}
+    }
+
+    fn restart_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+        let next = Ix {
+            pattern: ix.pattern - off,
+            node: ix.node - self.expanded_offsets[ix.pattern],
+            kleene_depth: ix.kleene_depth - 1,
+            ..ix
+        };
+        Next { cost: 0, next, kind: StepKind::NoOp }
+    }
 }
 
 impl Config {
-    fn expand_pattern(original: &Vec<Patt>) -> (Vec<Patt>, Vec<usize>) {
+    fn num_nodes(&self) -> usize {
+        self.text.len() * self.expanded_pattern_len
+    }
 
-        let mut expanded = vec![];
-        let mut original_ix = vec![];
-        let mut kleene_start_ixs = vec![];
-        let mut kleene_depth = 0;
+    fn expand(original: &Vec<Patt>) -> (usize, Vec<usize>) {
+        let mut len = 0;
+        let mut starts = vec![];
+        let mut offsets = vec![];
 
-        for (orig_ix, patt) in original.iter().enumerate() {
+        for (patt_ix, patt) in original.iter().enumerate() {
             match patt {
                 Patt::Lit(_) | Patt::Class(_) | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
-                    for _ in 0..=kleene_depth {
-                        expanded.push(patt.clone());
-                        original_ix.push(orig_ix);
-                    }
+                    len += starts.len() + 1;
+                    offsets.push(0);
                 },
                 Patt::KleeneStart(_) => {
-                    kleene_start_ixs.push(expanded.len());
-                    for _ in 0..=kleene_depth {
-                        expanded.push(Patt::KleeneStart(0)); // later will replace placeholder offset
-                        original_ix.push(orig_ix);
-                    }
-                    kleene_depth += 1;
+                    starts.push((patt_ix, len));
+                    len += starts.len();
+                    offsets.push(0); // will modify once we know where end is
                 },
                 Patt::KleeneEnd(_) => {
-                    let kleene_end_ix = expanded.len();
-                    let kleene_start_ix = kleene_start_ixs.pop().expect("cannot have more ends then starts");
-                    let offset = kleene_end_ix - kleene_start_ix;
-
-                    for _ in 0..=kleene_depth {
-                        expanded.push(Patt::KleeneEnd(offset));
-                        original_ix.push(orig_ix);
-                    }
-                    kleene_depth -= 1;
-
-                    for i in kleene_start_ix ..= kleene_start_ix + kleene_depth {
-                        expanded[i] = Patt::KleeneStart(offset);
-                    }
-                }
+                    let (start_patt, start_expand) = starts.pop().unwrap();
+                    let end_expand = len;
+                    let offset = end_expand - start_expand;
+                    len += starts.len() + 2;
+                    offsets[start_patt] = offset;
+                    offsets.push(offset);
+                },
             }
         }
 
-        (expanded, original_ix)
+        (len, offsets)
     }
 }
 
 pub struct State {
     nodes: Vec<Node<Ix>>,
-    expanded_pattern_len: usize
-}
-
-impl State {
-    fn nodes_ix(&self, ix: Ix) -> usize {
-        ix.text * self.expanded_pattern_len + ix.pattern + ix.kleene_depth_this_text
-    }
 }
 
 impl LatticeState<Config, Ix> for State {
     fn new(conf: &Config) -> Self {
-        let expanded_pattern_len = conf.expanded_pattern.len();
-        let num_nodes = expanded_pattern_len * conf.text.len();
-        State { nodes: vec![Node::Ready; num_nodes], expanded_pattern_len }
+        State { nodes: vec![Node::Ready; conf.num_nodes()] }
     }
 
 
     fn get(&self, ix: Ix) -> Node<Ix> {
-        self.nodes[self.nodes_ix(ix)]
+        self.nodes[ix.node]
     }
 
     fn set(&mut self, ix: Ix, node: Node<Ix>) {
-        let nodes_ix = self.nodes_ix(ix);
-        self.nodes[nodes_ix] = node;
+        self.nodes[ix.node] = node;
     }
 }
 
 /// Indexes into [`State`].
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
-    /// The index into [`Config`] text vector.
+    /// The index into [`Problem::pattern`](crate::Problem::pattern).
     pub text: usize,
-    /// The index into [`Config`] expanded pattern.
-    ///
-    /// Note that this always points to the first element in the expanded pattern. We use
-    /// [`Ix::kleene_depth_this_text`] to increment the index appropriately for other elements.
+    /// The index into [`Problem::text`](crate::Problem::text).
     pub pattern: usize,
-    /// This field tracks the number of places in the expanded pattern for our current element.
+    /// The index into [`State`] nodes vector.
+    pub node: usize,
+    /// This field tracks how many kleene groups the current pattern element is inside.
     ///
-    /// When we move from one pattern element to the next we increment [`Ix::pattern`] by this amount.
+    /// When we move from one pattern element to the next we increment [`Ix::pattern`] by this amount + 1.
     pub kleene_depth: usize,
     /// This field represents our "kleene depth since we last changed text index".
     ///
@@ -163,109 +254,16 @@ pub struct Ix {
 }
 
 impl LatticeIx<Config> for Ix {
-    fn start() -> Self {
-        Self { text: 0, pattern: 0, kleene_depth: 0, kleene_depth_this_text: 0 }
-    }
-
-    fn end(conf: &Config) -> Self {
-        Self {
-            text: conf.text.len() - 1,
-            pattern: conf.expanded_pattern.len() - 1, // kleene_depth == 0 at end
-            kleene_depth: 0,
-            kleene_depth_this_text: 0,
-        }
-    }
-
-    fn skip_text(&self) -> Next<Self> {
-        let next = Ix {
-            text: self.text + 1,
-            kleene_depth_this_text: 0,
-            ..*self
-        };
-        Next { cost: 1, next, kind: StepKind::SkipText }
-    }
-
-    fn skip_patt(&self) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + self.kleene_depth + 1,
-            ..*self
-        };
-        Next { cost: 1, next, kind: StepKind::SkipPattern }
-    }
-
-    fn hit(&self) -> Next<Self> {
-        let next = Ix {
-            text: self.text + 1,
-            pattern: self.pattern + self.kleene_depth + 1,
-            kleene_depth_this_text: 0,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::Hit }
-    }
-
-    fn start_group(&self) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + self.kleene_depth + 1,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::StartCapture }
-    }
-
-    fn stop_group(&self) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + self.kleene_depth + 1,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::StopCapture }
-    }
-
-    fn start_kleene(&self) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + self.kleene_depth + 1,
-            kleene_depth: self.kleene_depth + 1,
-            kleene_depth_this_text: self.kleene_depth_this_text + 1,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
-    fn end_kleene(&self) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + self.kleene_depth + 1,
-            kleene_depth: self.kleene_depth - 1,
-            kleene_depth_this_text: self.kleene_depth_this_text - 1,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
-    fn pass_kleene(&self, off: usize) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern + off + self.kleene_depth + 2,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::NoOp}
-    }
-
-    fn restart_kleene(&self, off: usize) -> Next<Self> {
-        let next = Ix {
-            pattern: self.pattern - off,
-            kleene_depth: self.kleene_depth - 1,
-            ..*self
-        };
-        Next { cost: 0, next, kind: StepKind::NoOp }
-    }
-
 
     fn can_restart(&self) -> bool {
         self.kleene_depth_this_text == 0
     }
 
-    fn to_step(conf: &Config, from: &Self, done: &Done<Self>) -> Step {
+    fn to_step(_conf: &Config, from: &Self, done: &Done<Self>) -> Step {
         Step {
-            from_patt: conf.original_pattern_ix[from.pattern],
-            to_patt: conf.original_pattern_ix[done.next.pattern],
+            from_patt: from.pattern,
             from_text: from.text,
+            to_patt: done.next.pattern,
             to_text: done.next.text,
             score: done.score,
             kind: done.kind,
