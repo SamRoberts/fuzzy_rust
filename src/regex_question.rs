@@ -59,41 +59,10 @@ impl RegexQuestion {
                 Ok(num_children + 2)
             }
             HirKind::Alternation(children) => {
-                // TODO how to do the left/right logic more cleanly?
-                let mut sum = 0;
-                let mut right_ix;
-
-                let branch = &children[0];
-                let left_ix = items.len();
-                items.push(Patt::AlternativeLeft(0)); // replaced with proper offset later
-                let num_branch = Self::parse_impl(branch, items)?;
-                right_ix = items.len();
-                items.push(Patt::AlternativeRight(0)); // replaced with proper offset later
-                let offset = num_branch + 1;
-                items[left_ix] = Patt::AlternativeLeft(offset);
-                sum += num_branch + 2;
-
-                for i in 1..children.len()-1 {
-                    let branch = &children[i];
-                    let left_ix = items.len();
-                    items.push(Patt::AlternativeLeft(0)); // replaced with proper offset later
-                    let num_branch = Self::parse_impl(branch, items)?;
-                    let right_offset = num_branch + 2;
-                    items[right_ix] = Patt::AlternativeRight(right_offset);
-                    right_ix = items.len();
-                    items.push(Patt::AlternativeRight(0)); // replaced with proper offset later
-                    let offset = num_branch + 1;
-                    items[left_ix] = Patt::AlternativeLeft(offset);
-                    sum += num_branch + 2;
+                match &children[..] {
+                    [] => Ok(0),
+                    [left, right @ ..] => Self::parse_alternation_impl(left, right, items),
                 }
-
-                let branch = children.last().unwrap();
-                let num_branch = Self::parse_impl(branch, items)?;
-                let right_offset = num_branch + 1;
-                items[right_ix] = Patt::AlternativeRight(right_offset);
-                sum += num_branch;
-
-                Ok(sum)
             }
             HirKind::Repetition(Repetition { min: 0, max: None, sub, .. }) => {
                 let start_ix = items.len();
@@ -113,6 +82,26 @@ impl RegexQuestion {
             }
             unsupported => {
                 Err(Error::PatternUnsupported(format!("{:?}", unsupported)))
+            }
+        }
+    }
+
+    fn parse_alternation_impl(left: &Hir, right: &[Hir], items: &mut Vec<Patt>) -> Result<usize, Error> {
+        match right {
+            [] => Self::parse_impl(left, items),
+            [next_left, next_right @ ..] => {
+                let left_ix = items.len();
+                items.push(Patt::AlternativeLeft(0)); // replaced with proper offset later
+                let num_left = Self::parse_impl(left, items)?;
+                let right_ix = items.len();
+                items.push(Patt::AlternativeRight(0)); // replaced with proper offset later
+                let num_right = Self::parse_alternation_impl(next_left, next_right, items)?;
+                let next_ix = items.len();
+
+                items[left_ix] = Patt::AlternativeLeft(right_ix - left_ix);
+                items[right_ix] = Patt::AlternativeRight(next_ix - right_ix);
+
+                Ok(num_left + num_right + 2)
             }
         }
     }
@@ -175,7 +164,7 @@ mod tests {
             Patt::AlternativeLeft(3),
             Patt::Lit('a'),
             Patt::Lit('b'),
-            Patt::AlternativeRight(4),
+            Patt::AlternativeRight(9),
             Patt::AlternativeLeft(3),
             Patt::Lit('c'),
             Patt::Lit('d'),
