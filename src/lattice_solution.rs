@@ -133,18 +133,18 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_right(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::KleeneEnd(off) if ix.can_restart() => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_kleene(ix, *off))?;
+                    Patt::RepetitionEnd(off) if ix.can_restart() => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_repetition(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::KleeneEnd(_) => { // cannot restart
-                        let outcome = Self::solve_ix(conf, state, end_ix, conf.end_kleene(ix))?;
+                    Patt::RepetitionEnd(_) => { // cannot restart
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.end_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::KleeneStart(off) => {
-                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_kleene(ix))?;
+                    Patt::RepetitionStart(off) => {
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.start_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
-                        let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_kleene(ix, *off))?;
+                        let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_repetition(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     }
                     Patt::End =>
@@ -201,10 +201,10 @@ pub trait LatticeConfig<Ix> {
     fn start_left(&self, ix: Ix) -> Next<Ix>;
     fn start_right(&self, ix: Ix, off: usize) -> Next<Ix>;
     fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix>;
-    fn start_kleene(&self, ix: Ix) -> Next<Ix>;
-    fn end_kleene(&self, ix: Ix) -> Next<Ix>;
-    fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix>;
-    fn restart_kleene(&self, ix: Ix, off: usize) -> Next<Ix>;
+    fn start_repetition(&self, ix: Ix) -> Next<Ix>;
+    fn end_repetition(&self, ix: Ix) -> Next<Ix>;
+    fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix>;
+    fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix>;
 }
 
 pub trait LatticeState<Conf, Ix> {
@@ -287,16 +287,16 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::match_alternative_3());
     }
 
-    pub fn test_solve_match_kleene_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_kleene_1());
+    pub fn test_solve_match_repetition_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_repetition_1());
     }
 
-    pub fn test_solve_match_kleene_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_kleene_2());
+    pub fn test_solve_match_repetition_2<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_repetition_2());
     }
 
-    pub fn test_solve_match_kleene_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_kleene_3());
+    pub fn test_solve_match_repetition_3<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_repetition_3());
     }
 
     pub fn test_solve_fail_empty_1<Sln: LatticeSolution>() {
@@ -327,8 +327,8 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::fail_alternative_1());
     }
 
-    pub fn test_solve_fail_kleene_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_kleene_1());
+    pub fn test_solve_fail_repetition_1<Sln: LatticeSolution>() {
+        test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_repetition_1());
     }
 
     pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step>>) {

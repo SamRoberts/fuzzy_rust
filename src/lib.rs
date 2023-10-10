@@ -131,13 +131,13 @@ pub enum Patt {
     /// Starts a repetition.
     ///
     /// This stores the offset between this item and the corresponding future
-    /// [`KleeneEnd`](Patt::KleeneEnd) item.
-    KleeneStart(usize),
+    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
+    RepetitionStart(usize),
     /// Ends a repetition.
     ///
     /// This stores the offset between this item and the corresponding past
-    /// [`KleeneStart`](Patt::KleeneStart) item.
-    KleeneEnd(usize),
+    /// [`RepetitionStart`](Patt::RepetitionStart) item.
+    RepetitionEnd(usize),
     /// Ends the pattern.
     ///
     /// Although this is redundant, fuzzy currently requires the pattern vector to end with
@@ -396,10 +396,10 @@ pub mod test_cases {
             }
         }
 
-        pub fn match_kleene_1() -> Self {
+        pub fn match_repetition_1() -> Self {
             Self {
                 problem: Problem {
-                    pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
+                    pattern: vec![Patt::RepetitionStart(2), Patt::Lit('a'), Patt::RepetitionEnd(2), Patt::End],
                     text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
                 },
                 score: 0,
@@ -415,16 +415,16 @@ pub mod test_cases {
             }
         }
 
-        pub fn match_kleene_2() -> Self {
+        pub fn match_repetition_2() -> Self {
             Self {
                 problem: Problem {
                     pattern: vec![
-                        Patt::KleeneStart(5),
+                        Patt::RepetitionStart(5),
                         Patt::Lit('a'),
-                        Patt::KleeneStart(2),
+                        Patt::RepetitionStart(2),
                         Patt::Lit('b'),
-                        Patt::KleeneEnd(2),
-                        Patt::KleeneEnd(5),
+                        Patt::RepetitionEnd(2),
+                        Patt::RepetitionEnd(5),
                         Patt::End
                     ],
                     text: vec![
@@ -465,10 +465,10 @@ pub mod test_cases {
             }
         }
 
-        pub fn match_kleene_3() -> Self {
+        pub fn match_repetition_3() -> Self {
             Self {
                 problem: Problem {
-                    pattern: vec![Patt::KleeneStart(2), patt_class("[0-9]"), Patt::KleeneEnd(2), Patt::End],
+                    pattern: vec![Patt::RepetitionStart(2), patt_class("[0-9]"), Patt::RepetitionEnd(2), Patt::End],
                     text:    vec![Text::Lit('0'), Text::Lit('4'), Text::Lit('5'), Text::Lit('1'), Text::End],
                 },
                 score: 0,
@@ -614,10 +614,10 @@ pub mod test_cases {
 
     // these cases have multiple optimal traces so can't easily check trace
     impl TestCase<()> {
-        pub fn fail_kleene_1() -> Self {
+        pub fn fail_repetition_1() -> Self {
             Self {
                 problem: Problem {
-                    pattern: vec![Patt::KleeneStart(2), Patt::Lit('a'), Patt::KleeneEnd(2), Patt::End],
+                    pattern: vec![Patt::RepetitionStart(2), Patt::Lit('a'), Patt::RepetitionEnd(2), Patt::End],
                     text:    vec![Text::Lit('a'), Text::Lit('b'), Text::Lit('a'), Text::End],
                 },
                 score: 1,
