@@ -148,24 +148,24 @@ mod tests {
     }
 
     #[test]
-    fn test_new_match_kleene_1() {
-        let test_case = TestCase::match_kleene_1();
+    fn test_new_match_repetition_1() {
+        let test_case = TestCase::match_repetition_1();
         let expected = "aa";
         let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
     #[test]
-    fn test_new_match_kleene_2() {
-        let test_case = TestCase::match_kleene_2();
+    fn test_new_match_repetition_2() {
+        let test_case = TestCase::match_repetition_2();
         let expected = "aababb";
         let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
     #[test]
-    fn test_new_match_kleene_3() {
-        let test_case = TestCase::match_kleene_3();
+    fn test_new_match_repetition_3() {
+        let test_case = TestCase::match_repetition_3();
         let expected = "0451";
         let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
         assert_eq!(expected, actual);

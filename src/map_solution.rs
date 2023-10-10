@@ -92,22 +92,22 @@ impl LatticeConfig<Ix> for Config {
         Next { cost: 0, next, kind: StepKind::NoOp }
     }
 
-    fn start_kleene(&self, ix: Ix) -> Next<Ix> {
+    fn start_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, kix: ix.kix + 1, ..ix };
         Next { cost: 0, next, kind: StepKind::NoOp }
     }
 
-    fn end_kleene(&self, ix: Ix) -> Next<Ix> {
+    fn end_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, kix: ix.kix - 1, ..ix };
         Next { cost: 0, next, kind: StepKind::NoOp }
     }
 
-    fn pass_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+    fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix + off + 1, ..ix};
         Next { cost: 0, next, kind: StepKind::NoOp}
     }
 
-    fn restart_kleene(&self, ix: Ix, off: usize) -> Next<Ix> {
+    fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix - off, ..ix };
         Next { cost: 0, next, kind: StepKind::NoOp }
     }
@@ -143,14 +143,14 @@ pub struct Ix {
     pub pix: usize,
     /// The index into [`Problem::text`](crate::Problem::text).
     pub tix: usize,
-    /// This field represents our "kleene depth since we last changed text index".
+    /// This field represents our "repetition depth since we last changed text index".
     ///
-    /// To avoid infinite loops, we have to avoid repeating a kleene group if that would take us
-    /// back to the same index we started at. We keep track of how many kleene groups we entered
+    /// To avoid infinite loops, we have to avoid repeating a repetition group if that would take us
+    /// back to the same index we started at. We keep track of how many repetition groups we entered
     /// since we last matched or skipped a text character, and avoid looping back unless this is 0.
-    /// This ix the "kleene depth". Because the "kleene depth" affects future jumps, it also
+    /// This ix the "repetition depth". Because the "repetition depth" affects future jumps, it also
     /// affects the future score, and so we have a separate score and a separate index for each
-    /// kleene depth value.
+    /// repetition depth value.
     pub kix: usize,
 }
 
@@ -222,18 +222,18 @@ mod tests {
     }
 
     #[test]
-    fn test_solve_match_kleene_1() {
-        tests::test_solve_match_kleene_1::<MapSolution>();
+    fn test_solve_match_repetition_1() {
+        tests::test_solve_match_repetition_1::<MapSolution>();
     }
 
     #[test]
-    fn test_solve_match_kleene_2() {
-        tests::test_solve_match_kleene_2::<MapSolution>();
+    fn test_solve_match_repetition_2() {
+        tests::test_solve_match_repetition_2::<MapSolution>();
     }
 
     #[test]
-    fn test_solve_match_kleene_3() {
-        tests::test_solve_match_kleene_3::<MapSolution>();
+    fn test_solve_match_repetition_3() {
+        tests::test_solve_match_repetition_3::<MapSolution>();
     }
 
     #[test]
@@ -272,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_solve_fail_kleene_1() {
-        tests::test_solve_fail_kleene_1::<MapSolution>();
+    fn test_solve_fail_repetition_1() {
+        tests::test_solve_fail_repetition_1::<MapSolution>();
     }
 }

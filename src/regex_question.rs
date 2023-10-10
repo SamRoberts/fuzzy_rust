@@ -66,11 +66,11 @@ impl RegexQuestion {
             }
             HirKind::Repetition(Repetition { min: 0, max: None, sub, .. }) => {
                 let start_ix = items.len();
-                items.push(Patt::KleeneStart(0)); // replaced with proper offset later
+                items.push(Patt::RepetitionStart(0)); // replaced with proper offset later
                 let num_children = Self::parse_impl(sub, items)?;
                 let offset = num_children + 1;
-                items[start_ix] = Patt::KleeneStart(offset);
-                items.push(Patt::KleeneEnd(offset));
+                items[start_ix] = Patt::RepetitionStart(offset);
+                items.push(Patt::RepetitionEnd(offset));
                 Ok(num_children + 2)
             }
             HirKind::Concat(children) => {
@@ -133,11 +133,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_kleene_1() {
+    fn parse_repetition_1() {
         parse_test("a*", vec![
-            Patt::KleeneStart(2),
+            Patt::RepetitionStart(2),
             Patt::Lit('a'),
-            Patt::KleeneEnd(2),
+            Patt::RepetitionEnd(2),
         ]);
     }
 
