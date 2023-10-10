@@ -371,10 +371,10 @@ pub mod test_cases {
                     pattern: vec![
                         Patt::AlternativeLeft(2),
                         Patt::Lit('a'),
-                        Patt::AlternativeRight(3),
+                        Patt::AlternativeRight(8),
                         Patt::AlternativeLeft(2),
                         Patt::Lit('b'),
-                        Patt::AlternativeRight(2),
+                        Patt::AlternativeRight(5),
                         Patt::AlternativeLeft(2),
                         Patt::Lit('c'),
                         Patt::AlternativeRight(2),

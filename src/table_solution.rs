@@ -216,11 +216,13 @@ impl Config {
         let mut offsets_expand = vec![];
 
         for (patt_ix, patt) in original.iter().enumerate() {
-            if let Some((right_patt, right_expand, end_patt)) = alternative_rights.last() {
+            while let Some((right_patt, right_expand, end_patt)) = alternative_rights.last() {
                 if patt_ix == *end_patt {
                     let offset = len_expand - *right_expand;
                     offsets_expand[*right_patt] = offset;
                     alternative_rights.pop();
+                } else {
+                    break;
                 }
             }
 
