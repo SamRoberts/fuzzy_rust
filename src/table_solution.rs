@@ -4,13 +4,13 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{Patt, Problem, Step, StepKind, Text};
-use crate::lattice_solution::{Done, LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
+use crate::{Patt, Problem, Step, Text};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
     score: usize,
-    trace: Vec<Step>,
+    trace: Vec<Step<Patt, Text>>,
 }
 
 impl LatticeSolution for TableSolution {
@@ -18,7 +18,7 @@ impl LatticeSolution for TableSolution {
     type Ix = Ix;
     type State = State;
 
-    fn new(score: usize, trace: Vec<Step>) -> Self {
+    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self {
         TableSolution { score, trace }
     }
 
@@ -26,7 +26,7 @@ impl LatticeSolution for TableSolution {
         &self.score
     }
 
-    fn trace_lattice(&self) -> &Vec<Step> {
+    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>> {
         &self.trace
     }
 }
@@ -91,7 +91,7 @@ impl LatticeConfig<Ix> for Config {
             repetition_depth_this_text: 0,
             ..ix
         };
-        Next { cost: 1, next, kind: StepKind::SkipText }
+        Next { cost: 1, next, step: Some(Step::SkipText(())) }
     }
 
     fn skip_patt(&self, ix: Ix) -> Next<Ix> {
@@ -100,7 +100,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + ix.repetition_depth + 1,
             ..ix
         };
-        Next { cost: 1, next, kind: StepKind::SkipPattern }
+        Next { cost: 1, next, step: Some(Step::SkipPattern(())) }
     }
 
     fn hit(&self, ix: Ix) -> Next<Ix> {
@@ -111,7 +111,7 @@ impl LatticeConfig<Ix> for Config {
             repetition_depth_this_text: 0,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::Hit }
+        Next { cost: 0, next, step: Some(Step::Hit((),())) }
     }
 
     fn start_group(&self, ix: Ix) -> Next<Ix> {
@@ -120,7 +120,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + ix.repetition_depth + 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::StartCapture }
+        Next { cost: 0, next, step: Some(Step::StartCapture) }
     }
 
     fn stop_group(&self, ix: Ix) -> Next<Ix> {
@@ -129,7 +129,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + ix.repetition_depth + 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::StopCapture }
+        Next { cost: 0, next, step: Some(Step::StopCapture) }
     }
 
     fn start_left(&self, ix: Ix) -> Next<Ix> {
@@ -138,7 +138,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + ix.repetition_depth + 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
@@ -147,7 +147,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + self.expanded_offsets[ix.pattern] + ix.repetition_depth + 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
@@ -156,7 +156,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + self.expanded_offsets[ix.pattern],
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn start_repetition(&self, ix: Ix) -> Next<Ix> {
@@ -167,7 +167,7 @@ impl LatticeConfig<Ix> for Config {
             repetition_depth_this_text: ix.repetition_depth_this_text + 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn end_repetition(&self, ix: Ix) -> Next<Ix> {
@@ -178,7 +178,7 @@ impl LatticeConfig<Ix> for Config {
             repetition_depth_this_text: ix.repetition_depth_this_text - 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
@@ -187,7 +187,7 @@ impl LatticeConfig<Ix> for Config {
             node: ix.node + self.expanded_offsets[ix.pattern] + ix.repetition_depth + 2,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp}
+        Next { cost: 0, next, step: None }
     }
 
     fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
@@ -197,7 +197,7 @@ impl LatticeConfig<Ix> for Config {
             repetition_depth: ix.repetition_depth - 1,
             ..ix
         };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 }
 
@@ -309,17 +309,6 @@ pub struct Ix {
 impl LatticeIx<Config> for Ix {
     fn can_restart(&self) -> bool {
         self.repetition_depth_this_text == 0
-    }
-
-    fn to_step(_conf: &Config, from: &Self, done: &Done<Self>) -> Step {
-        Step {
-            from_patt: from.pattern,
-            from_text: from.text,
-            to_patt: done.next.pattern,
-            to_text: done.next.text,
-            score: done.score,
-            kind: done.kind,
-        }
     }
 }
 

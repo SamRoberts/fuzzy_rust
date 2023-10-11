@@ -1,6 +1,6 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Patt, Problem, Solution, Step, StepKind, Text};
+use crate::{Patt, Problem, Solution, Step, Text};
 use crate::error::Error;
 use std::fmt::Debug;
 
@@ -29,10 +29,10 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
     /// [`Conf`](LatticeSolution::Conf).
     type Ix: LatticeIx<Self::Conf>;
 
-    fn new(score: usize, trace: Vec<Step>) -> Self;
+    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self;
 
     fn score_lattice(&self) -> &usize;
-    fn trace_lattice(&self) -> &Vec<Step>;
+    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>>;
 
     /// [`Solution::solve`] implementation.
     fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
@@ -42,7 +42,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         let start_ix = conf.start();
         let end_ix = conf.end();
 
-        let start_lead = Next { cost: 0, next: start_ix, kind: StepKind::NoOp };
+        let start_lead = Next { cost: 0, next: start_ix, step: None };
         let _ = Self::solve_ix(&conf, &mut state, end_ix, start_lead)?;
 
         let score = match state.get(start_ix) {
@@ -54,8 +54,10 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         let mut from = start_ix;
         while let Node::Done(done) = state.get(from) {
             if from == end_ix { break; }
-            let step = Self::Ix::to_step(&conf, &from, &done);
-            trace.push(step);
+            for step in done.step.iter() {
+                let (patt, text) = conf.get(from);
+                trace.push(step.with(patt.clone(), text.clone()));
+            }
             from = done.next;
         }
         if from != end_ix {
@@ -75,13 +77,13 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         end_ix: Self::Ix,
         lead: Next<Self::Ix>,
      ) -> Result<Done<Self::Ix>, Error> {
-        let Next { cost, kind, next: ix } = lead; // the step's lead is our current ix
+        let Next { cost, step, next: ix } = lead; // the step's lead is our current ix
 
         match state.get(ix) {
             Node::Working =>
                 Err(Error::InfiniteLoop(format!("{:?}", ix))),
             Node::Done(done) =>
-                Ok(Done { score: done.score + cost, next: ix, kind }),
+                Ok(Done { score: done.score + cost, next: ix, step }),
             Node::Ready => {
                 state.set(ix, Node::Working);
 
@@ -154,13 +156,13 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 let score = match maybe_score {
                     Some(score) => score,
                     None if ix == end_ix =>
-                        Done { score: 0, next: end_ix, kind: StepKind::NoOp },
+                        Done { score: 0, next: end_ix, step: None },
                     None =>
                         return Err(Error::Blocked(format!("{:?}", ix))),
                 };
 
                 state.set(ix, Node::Done(score));
-                Ok(Done { score: score.score + cost, next: ix, kind })
+                Ok(Done { score: score.score + cost, next: ix, step })
             }
         }
     }
@@ -177,7 +179,7 @@ impl <Sln> Solution<Error> for Sln where
         LatticeSolution::score_lattice(self)
     }
 
-    fn trace(&self) -> &Vec<Step> {
+    fn trace(&self) -> &Vec<Step<Patt, Text>> {
         LatticeSolution::trace_lattice(self)
     }
 
@@ -215,8 +217,6 @@ pub trait LatticeState<Conf, Ix> {
 
 pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized {
     fn can_restart(&self) -> bool;
-
-    fn to_step(conf: &Conf, from: &Self, done: &Done<Self>) -> Step;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -230,7 +230,7 @@ pub enum Node<Ix: Sized> {
 pub struct Done<Ix: Sized> {
     pub score: usize,
     pub next: Ix,
-    pub kind: StepKind,
+    pub step: Option<Step<(),()>>,
 }
 
 impl <Ix: Sized> Done<Ix> {
@@ -243,7 +243,7 @@ impl <Ix: Sized> Done<Ix> {
 pub struct Next<Ix> {
     pub cost: usize,
     pub next: Ix,
-    pub kind: StepKind,
+    pub step: Option<Step<(),()>>,
 }
 
 #[cfg(test)]
@@ -331,7 +331,7 @@ pub mod tests {
         test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_repetition_1());
     }
 
-    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step>>) {
+    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Patt, Text>>>) {
         let actual = Sln::solve(&test_case.problem).unwrap();
         assert_eq!(test_case.score, *actual.score());
         assert_eq!(test_case.trace, *actual.trace());

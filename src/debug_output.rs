@@ -1,6 +1,6 @@
 //! Provides an implementation of [`Output`] suitable for development.
 
-use crate::{Output, Problem, Step};
+use crate::{Output, Patt, Problem, Step, Text};
 use std::fmt;
 
 pub struct DebugOutput {
@@ -8,7 +8,7 @@ pub struct DebugOutput {
 }
 
 impl Output for DebugOutput {
-    fn new(_problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self {
+    fn new(_problem: &Problem, score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self {
         Self { output: format!("score: {}\ntrace: {:#?}", *score, *trace) }
     }
 }

@@ -1,6 +1,6 @@
 //! Provides an implementation of [`Output`] that mimics git's character-level diff.
 
-use crate::{Output, Patt, Problem, Step, StepKind, Text};
+use crate::{Output, Patt, Problem, Step, Text};
 use std::fmt;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
@@ -49,20 +49,20 @@ struct Same { text: Vec<char> }
 struct Diff { taken: Vec<char>, added: Vec<char> }
 
 impl Output for DiffOutput {
-    fn new(problem: &Problem, _score: &usize, trace: &Vec<Step>) -> Self {
+    fn new(_problem: &Problem, _score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self {
         let mut chunks = vec![];
         for step in trace.iter() {
             let current_chunk = chunks.last_mut();
-            match (step.kind, current_chunk, &problem.text[step.from_text], &problem.pattern[step.from_patt]) {
-                (StepKind::Hit,         Some(Chunk::Same(same)), Text::Lit(c), _)   => same.text.push(*c),
-                (StepKind::Hit,         _,                       Text::Lit(c), _)   => chunks.push(Chunk::new_same(*c)),
-                (StepKind::SkipText,    Some(Chunk::Diff(diff)), Text::Lit(c), _)   => diff.added.push(*c),
-                (StepKind::SkipText,    _,                       Text::Lit(c), _)   => chunks.push(Chunk::new_added(*c)),
-                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Lit(c))   => diff.taken.push(*c),
-                (StepKind::SkipPattern, Some(Chunk::Diff(diff)), _, Patt::Class(_)) => diff.taken.push(ANY),
-                (StepKind::SkipPattern, _,                       _, Patt::Lit(c))   => chunks.push(Chunk::new_taken(*c)),
-                (StepKind::SkipPattern, _,                       _, Patt::Class(_)) => chunks.push(Chunk::new_taken(ANY)),
-                _ => {},
+            match (step, current_chunk) {
+                (Step::Hit(_, Text::Lit(c)),        Some(Chunk::Same(same))) => same.text.push(*c),
+                (Step::Hit(_, Text::Lit(c)),        _)                       => chunks.push(Chunk::new_same(*c)),
+                (Step::SkipText(Text::Lit(c)),      Some(Chunk::Diff(diff))) => diff.added.push(*c),
+                (Step::SkipText(Text::Lit(c)),      _)                       => chunks.push(Chunk::new_added(*c)),
+                (Step::SkipPattern(Patt::Lit(c)),   Some(Chunk::Diff(diff))) => diff.taken.push(*c),
+                (Step::SkipPattern(Patt::Class(_)), Some(Chunk::Diff(diff))) => diff.taken.push(ANY),
+                (Step::SkipPattern(Patt::Lit(c)),   _)                       => chunks.push(Chunk::new_taken(*c)),
+                (Step::SkipPattern(Patt::Class(_)), _)                       => chunks.push(Chunk::new_taken(ANY)),
+                _                                                            => {},
             }
         }
         DiffOutput { chunks }
