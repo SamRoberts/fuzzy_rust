@@ -3,14 +3,14 @@
 //! This implementation uses a [map](State) to store state for each [node](Ix), so it should be
 //! easy to change node representation and expand the state space over time.
 
-use crate::{Patt, Problem, Step, StepKind, Text};
-use crate::lattice_solution::{Done, LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
+use crate::{Patt, Problem, Step, Text};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 use std::collections::hash_map::HashMap;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct MapSolution {
     score: usize,
-    trace: Vec<Step>,
+    trace: Vec<Step<Patt, Text>>,
 }
 
 impl LatticeSolution for MapSolution {
@@ -18,7 +18,7 @@ impl LatticeSolution for MapSolution {
     type Ix = Ix;
     type State = State;
 
-    fn new(score: usize, trace: Vec<Step>) -> Self {
+    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self {
         MapSolution { score, trace }
     }
 
@@ -26,7 +26,7 @@ impl LatticeSolution for MapSolution {
         &self.score
     }
 
-    fn trace_lattice(&self) -> &Vec<Step> {
+    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>> {
         &self.trace
     }
 }
@@ -54,62 +54,62 @@ impl LatticeConfig<Ix> for Config {
 
     fn skip_text(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { tix: ix.tix + 1, kix: 0, ..ix };
-        Next { cost: 1, next, kind: StepKind::SkipText }
+        Next { cost: 1, next, step: Some(Step::SkipText(())) }
     }
 
     fn skip_patt(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, ..ix };
-        Next { cost: 1, next, kind: StepKind::SkipPattern }
+        Next { cost: 1, next, step: Some(Step::SkipPattern(())) }
     }
 
     fn hit(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, tix: ix.tix + 1, kix: 0, ..ix };
-        Next { cost: 0, next, kind: StepKind::Hit }
+        Next { cost: 0, next, step: Some(Step::Hit((), ())) }
     }
 
     fn start_group(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::StartCapture }
+        Next { cost: 0, next, step: Some(Step::StartCapture) }
     }
 
     fn stop_group(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::StopCapture }
+        Next { cost: 0, next, step: Some(Step::StopCapture) }
     }
 
     fn start_left(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix + off + 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix + off, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn start_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, kix: ix.kix + 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn end_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix { pix: ix.pix + 1, kix: ix.kix - 1, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
     fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix + off + 1, ..ix};
-        Next { cost: 0, next, kind: StepKind::NoOp}
+        Next { cost: 0, next, step: None}
     }
 
     fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix { pix: ix.pix - off, ..ix };
-        Next { cost: 0, next, kind: StepKind::NoOp }
+        Next { cost: 0, next, step: None }
     }
 
 }
@@ -157,17 +157,6 @@ pub struct Ix {
 impl LatticeIx<Config> for Ix {
     fn can_restart(&self) -> bool {
         self.kix == 0
-    }
-
-    fn to_step(_conf: &Config, from: &Self, done: &Done<Self>) -> Step {
-        Step {
-            from_patt: from.pix,
-            from_text: from.tix,
-            to_patt: done.next.pix,
-            to_text: done.next.tix,
-            score: done.score,
-            kind: done.kind,
-        }
     }
 }
 

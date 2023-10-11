@@ -82,7 +82,7 @@ pub trait Solution<Error> : Sized {
     fn score(&self) -> &usize;
 
     /// Return the [`Step`]s followed by the optimal match between pattern and text.
-    fn trace(&self) -> &Vec<Step>;
+    fn trace(&self) -> &Vec<Step<Patt, Text>>;
 }
 
 /// Displays the final solution.
@@ -94,7 +94,7 @@ pub trait Solution<Error> : Sized {
 /// If the [`Solution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
-    fn new(problem: &Problem, score: &usize, trace: &Vec<Step>) -> Self;
+    fn new(problem: &Problem, score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self;
 }
 
 /// Represents a parsed pattern and the text it is meant to match.
@@ -194,38 +194,27 @@ pub enum Text {
 }
 
 /// An individual element in [`Solution::trace`].
-///
-/// Each step represents a transition from one [`Patt`] to another, or one [`Text`] to another, or
-/// both.
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
-pub struct Step {
-    /// The index into [`Problem::pattern`] we transitioned from.
-    pub from_patt: usize,
-    /// The index into [`Problem::text`] we transitioned into.
-    pub from_text: usize,
-    /// The index into [`Problem::pattern`] we transitioned to.
-    pub to_patt: usize,
-    /// The index into [`Problem::text`] we transitioned to.
-    pub to_text: usize,
-    /// The cumulative score from this step to the end of [`Solution::trace`].
-    pub score: usize,
-    /// The type of step (e.g. did the pattern and text match? Did we skip something?)
-    pub kind: StepKind,
-}
-
-/// Included in [`Step`] to represent the type of step taken.
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
-pub enum StepKind {
-    /// This step did not involve matching or skipping any characters in the text or pattern.
-    ///
-    /// This is typically used when navigating between control [`Patt`] elements (e.g. skip past a
-    /// repetition).
-    NoOp,
-    Hit,
-    SkipText,
-    SkipPattern,
+pub enum Step<P, T> {
+    // NOTE: making P and T generic seems overkill right now, but will be useful when I completely
+    // separate Patt/Text in solutions from Patt/Text in top-level api
+    Hit(P, T),
+    SkipPattern(P),
+    SkipText(T),
     StartCapture,
     StopCapture,
+}
+
+impl <P, T> Step<P, T> {
+    fn with<Q, U>(&self, q: Q, u: U) -> Step<Q, U> {
+        match self {
+            Self::Hit(_, _) => Step::Hit(q, u),
+            Self::SkipPattern(_) => Step::SkipPattern(q),
+            Self::SkipText(_) => Step::SkipText(u),
+            Self::StartCapture => Step::StartCapture,
+            Self::StopCapture => Step::StopCapture,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -240,7 +229,7 @@ pub mod test_cases {
         pub trace: Trace
     }
 
-    impl TestCase<Vec<Step>> {
+    impl TestCase<Vec<Step<Patt, Text>>> {
         pub fn match_empty() -> Self {
             Self {
                 problem: Problem {
@@ -260,7 +249,7 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
                 ],
             }
         }
@@ -273,8 +262,8 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
-                    Self::step(1, 1, 2, 2, 0, StepKind::Hit),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
                 ],
             }
         }
@@ -287,7 +276,7 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                    Step::Hit(patt_class("."), Text::Lit('a')),
                 ],
             }
         }
@@ -300,7 +289,7 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                    Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('a')),
                 ],
             }
         }
@@ -313,7 +302,7 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 0, StepKind::Hit),
+                    Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('X')),
                 ],
             }
         }
@@ -334,10 +323,8 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
-                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
-                    Self::step(2, 1, 3, 2, 0, StepKind::Hit),
-                    Self::step(3, 2, 6, 2, 0, StepKind::NoOp),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
                 ],
             }
         }
@@ -358,9 +345,8 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 4, 0, 0, StepKind::NoOp),
-                    Self::step(4, 0, 5, 1, 0, StepKind::Hit),
-                    Self::step(5, 1, 6, 2, 0, StepKind::Hit),
+                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
+                    Step::Hit(Patt::Lit('d'), Text::Lit('d')),
                 ],
             }
         }
@@ -386,12 +372,8 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0,  0, 3,  0, 0, StepKind::NoOp),
-                    Self::step(3,  0, 6,  0, 0, StepKind::NoOp),
-                    Self::step(6,  0, 7,  0, 0, StepKind::NoOp),
-                    Self::step(7,  0, 8,  1, 0, StepKind::Hit),
-                    Self::step(8,  1, 10, 1, 0, StepKind::NoOp),
-                    Self::step(10, 1, 11, 2, 0, StepKind::Hit),
+                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
+                    Step::Hit(Patt::Lit('z'), Text::Lit('z')),
                 ],
             }
         }
@@ -404,13 +386,8 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
-                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
-                    Self::step(2, 1, 0, 1, 0, StepKind::NoOp),
-                    Self::step(0, 1, 1, 1, 0, StepKind::NoOp),
-                    Self::step(1, 1, 2, 2, 0, StepKind::Hit),
-                    Self::step(2, 2, 0, 2, 0, StepKind::NoOp),
-                    Self::step(0, 2, 3, 2, 0, StepKind::NoOp),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
                 ],
             }
         }
@@ -439,28 +416,12 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
-                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
-                    Self::step(2, 1, 5, 1, 0, StepKind::NoOp),
-                    Self::step(5, 1, 0, 1, 0, StepKind::NoOp),
-                    Self::step(0, 1, 1, 1, 0, StepKind::NoOp),
-                    Self::step(1, 1, 2, 2, 0, StepKind::Hit),
-                    Self::step(2, 2, 3, 2, 0, StepKind::NoOp),
-                    Self::step(3, 2, 4, 3, 0, StepKind::Hit),
-                    Self::step(4, 3, 2, 3, 0, StepKind::NoOp),
-                    Self::step(2, 3, 5, 3, 0, StepKind::NoOp),
-                    Self::step(5, 3, 0, 3, 0, StepKind::NoOp),
-                    Self::step(0, 3, 1, 3, 0, StepKind::NoOp),
-                    Self::step(1, 3, 2, 4, 0, StepKind::Hit),
-                    Self::step(2, 4, 3, 4, 0, StepKind::NoOp),
-                    Self::step(3, 4, 4, 5, 0, StepKind::Hit),
-                    Self::step(4, 5, 2, 5, 0, StepKind::NoOp),
-                    Self::step(2, 5, 3, 5, 0, StepKind::NoOp),
-                    Self::step(3, 5, 4, 6, 0, StepKind::Hit),
-                    Self::step(4, 6, 2, 6, 0, StepKind::NoOp),
-                    Self::step(2, 6, 5, 6, 0, StepKind::NoOp),
-                    Self::step(5, 6, 0, 6, 0, StepKind::NoOp),
-                    Self::step(0, 6, 6, 6, 0, StepKind::NoOp),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
                 ],
             }
         }
@@ -473,19 +434,10 @@ pub mod test_cases {
                 },
                 score: 0,
                 trace: vec![
-                    Self::step(0, 0, 1, 0, 0, StepKind::NoOp),
-                    Self::step(1, 0, 2, 1, 0, StepKind::Hit),
-                    Self::step(2, 1, 0, 1, 0, StepKind::NoOp),
-                    Self::step(0, 1, 1, 1, 0, StepKind::NoOp),
-                    Self::step(1, 1, 2, 2, 0, StepKind::Hit),
-                    Self::step(2, 2, 0, 2, 0, StepKind::NoOp),
-                    Self::step(0, 2, 1, 2, 0, StepKind::NoOp),
-                    Self::step(1, 2, 2, 3, 0, StepKind::Hit),
-                    Self::step(2, 3, 0, 3, 0, StepKind::NoOp),
-                    Self::step(0, 3, 1, 3, 0, StepKind::NoOp),
-                    Self::step(1, 3, 2, 4, 0, StepKind::Hit),
-                    Self::step(2, 4, 0, 4, 0, StepKind::NoOp),
-                    Self::step(0, 4, 3, 4, 0, StepKind::NoOp),
+                    Step::Hit(patt_class("[0-9]"), Text::Lit('0')),
+                    Step::Hit(patt_class("[0-9]"), Text::Lit('4')),
+                    Step::Hit(patt_class("[0-9]"), Text::Lit('5')),
+                    Step::Hit(patt_class("[0-9]"), Text::Lit('1')),
                 ],
             }
         }
@@ -498,7 +450,7 @@ pub mod test_cases {
                 },
                 score: 1,
                 trace: vec![
-                    Self::step(0, 0, 0, 1, 1, StepKind::SkipText),
+                    Step::SkipText(Text::Lit('a')),
                 ],
             }
         }
@@ -511,7 +463,7 @@ pub mod test_cases {
                 },
                 score: 1,
                 trace: vec![
-                    Self::step(0, 0, 1, 0, 1, StepKind::SkipPattern),
+                    Step::SkipPattern(Patt::Lit('a')),
                 ],
             }
         }
@@ -524,8 +476,8 @@ pub mod test_cases {
                 },
                 score: 1,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 1, StepKind::Hit),
-                    Self::step(1, 1, 1, 2, 1, StepKind::SkipText),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::SkipText(Text::Lit('a')),
                 ],
             }
         }
@@ -538,9 +490,9 @@ pub mod test_cases {
                 },
                 score: 1,
                 trace: vec![
-                    Self::step(0, 0, 1, 1, 1, StepKind::Hit),
-                    Self::step(1, 1, 2, 1, 1, StepKind::SkipPattern),
-                    Self::step(2, 1, 3, 2, 0, StepKind::Hit),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::SkipPattern(Patt::Lit('b')),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
                 ],
             }
         }
@@ -553,14 +505,14 @@ pub mod test_cases {
                 },
                 score: 4,
                 trace: vec![
-                    Self::step(0, 0, 0, 1, 4, StepKind::SkipText),
-                    Self::step(0, 1, 1, 2, 3, StepKind::Hit),
-                    Self::step(1, 2, 2, 3, 3, StepKind::Hit),
-                    // TODO handle valid possibility that the order of next two steps is reversed
-                    Self::step(2, 3, 2, 4, 3, StepKind::SkipText),
-                    Self::step(2, 4, 3, 4, 2, StepKind::SkipPattern),
-                    Self::step(3, 4, 4, 4, 1, StepKind::SkipPattern),
-                    Self::step(4, 4, 5, 5, 0, StepKind::Hit),
+                    Step::SkipText(Text::Lit('z')),
+                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    // TODO handle valid possibility that the order of next three steps is changed
+                    Step::SkipText(Text::Lit('k')),
+                    Step::SkipPattern(Patt::Lit('c')),
+                    Step::SkipPattern(Patt::Lit('d')),
+                    Step::Hit(Patt::Lit('e'), Text::Lit('e')),
                 ],
             }
         }
@@ -574,8 +526,8 @@ pub mod test_cases {
                 score: 2,
                 trace: vec![
                     // TODO handle valid possibility that the order of next two steps is reversed
-                    Self::step(0, 0, 0, 1, 2, StepKind::SkipText),
-                    Self::step(0, 1, 1, 1, 1, StepKind::SkipPattern),
+                    Step::SkipText(Text::Lit('a')),
+                    Step::SkipPattern(patt_class("[^a]")),
                 ],
             }
         }
@@ -596,20 +548,12 @@ pub mod test_cases {
                 },
                 score: 1,
                 trace: vec![
-                    // TODO handle valid possibility that the order of next two steps is reversed
-                    Self::step(0, 0, 0, 1, 1, StepKind::SkipText),
-                    Self::step(0, 1, 4, 1, 0, StepKind::NoOp),
-                    Self::step(4, 1, 5, 2, 0, StepKind::Hit),
-                    Self::step(5, 2, 6, 3, 0, StepKind::Hit),
+                    Step::SkipText(Text::Lit('a')),
+                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
+                    Step::Hit(Patt::Lit('d'), Text::Lit('d')),
                 ],
             }
         }
-
-
-        fn step(from_patt: usize, from_text: usize, to_patt: usize, to_text: usize, score: usize, kind: StepKind) -> Step {
-            Step { from_patt, from_text, to_patt, to_text, score, kind }
-        }
-
     }
 
     // these cases have multiple optimal traces so can't easily check trace
