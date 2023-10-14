@@ -9,8 +9,6 @@ repository.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 regex-syntax.workspace = true
 thiserror.workspace = true
