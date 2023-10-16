@@ -15,11 +15,11 @@ use std::fmt;
 const ANY: char = '?';
 
 pub struct DiffOutput {
-    chunks: Vec<Chunk>,
+    pub chunks: Vec<Chunk>,
 }
 
 #[derive(Eq, PartialEq, Debug)]
-enum Chunk {
+pub enum Chunk {
     Same(Same),
     Diff(Diff),
 }
@@ -39,14 +39,14 @@ impl Chunk {
 }
 
 #[derive(Eq, PartialEq, Debug)]
-struct Same { text: Vec<char> }
+pub struct Same { pub text: Vec<char> }
 
 /// This structure records consecutive characters skipped in either the text or pattern.
 ///
 /// It's not necesary to remember the particular order these characters were skipped, and we get
 /// nicer output if we consolidate them like this.
 #[derive(Eq, PartialEq, Debug)]
-struct Diff { taken: Vec<char>, added: Vec<char> }
+pub struct Diff { pub taken: Vec<char>, pub added: Vec<char> }
 
 impl Output for DiffOutput {
     fn new(_problem: &Problem, _score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self {

@@ -1,24 +1,68 @@
-use lambda_http::{run, service_fn, Body, Error, Request, RequestExt, Response};
+use fuzzy::{Output, Question, Solution};
+use fuzzy::diff_output::{Chunk, DiffOutput};
+use fuzzy::table_solution::TableSolution;
+use fuzzy::regex_question::RegexQuestion;
+use lambda_http::{run, service_fn, Body, Error, Request, Response};
+use serde::{Serialize, Deserialize};
 
-/// This is the main body for the function.
-/// Write your code inside it.
-/// There are some code example in the following URLs:
-/// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
+#[derive(Deserialize)]
+struct Args {
+    /// The regex pattern to match TEXT.
+    pattern: String,
+
+    /// The text to be matched.
+    text: String,
+}
+
+#[derive(Serialize)]
+struct Out {
+    score: usize,
+    trace: Vec<OutChunk>,
+}
+
+#[derive(Serialize)]
+enum OutChunk {
+    Same(String),
+    Taken(String),
+    Added(String),
+}
+
+impl OutChunk {
+    fn from(chunks: &Vec<Chunk>) -> Vec<OutChunk> {
+        chunks.iter().flat_map(|chunk|
+            match chunk {
+                Chunk::Same(same) => vec![
+                    OutChunk::Same(same.text.iter().collect()),
+                ],
+                Chunk::Diff(diff) if diff.taken.is_empty() => vec![
+                    OutChunk::Added(diff.added.iter().collect()),
+                ],
+                Chunk::Diff(diff) if diff.added.is_empty() => vec![
+                    OutChunk::Taken(diff.taken.iter().collect()),
+                ],
+                Chunk::Diff(diff) => vec![
+                    OutChunk::Taken(diff.taken.iter().collect()),
+                    OutChunk::Added(diff.added.iter().collect()),
+                ],
+            }
+        ).collect()
+    }
+}
+
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    // Extract some useful information from the request
-    let who = event
-        .query_string_parameters_ref()
-        .and_then(|params| params.first("name"))
-        .unwrap_or("world");
-    let message = format!("Hello {who}, this is an AWS Lambda HTTP request");
+    let body_str = std::str::from_utf8(event.body())?;
+    let args = serde_json::from_str::<Args>(body_str)?;
 
-    // Return something that implements IntoResponse.
-    // It will be serialized to the right response event automatically by the runtime
+    let problem = RegexQuestion { pattern_regex: args.pattern, text: args.text }.ask()?;
+    let solution = TableSolution::solve(&problem)?;
+    let output = DiffOutput::new(&problem, solution.score(), solution.trace());
+    let body = Out { score: *solution.score(), trace: OutChunk::from(&output.chunks) };
+    let body_json = serde_json::to_string(&body)?;
+
     let resp = Response::builder()
         .status(200)
-        .header("content-type", "text/html")
-        .body(message.into())
-        .map_err(Box::new)?;
+        .header("content-type", "text/json")
+        .body(body_json.into())?;
     Ok(resp)
 }
 
