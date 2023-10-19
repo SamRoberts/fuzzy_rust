@@ -7,7 +7,7 @@
 
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
-use crate::{Class, Patt, Problem, Question, Text};
+use crate::{Atoms, Class, Element, Match, Pattern, ProblemV2, Question};
 use crate::error::Error;
 
 pub struct RegexQuestion {
@@ -16,92 +16,67 @@ pub struct RegexQuestion {
 }
 
 impl Question<Error> for RegexQuestion {
-    fn ask(&self) -> Result<Problem, Error> {
-        let text = Self::new_text(&self.text);
+    fn ask(&self) -> Result<ProblemV2, Error> {
         let pattern = Self::parse_pattern(&self.pattern_regex)?;
-        Ok(Problem { pattern, text })
+        let text = Atoms { atoms: self.text.chars().collect() };
+        Ok(ProblemV2 { pattern, text })
     }
 }
 
 impl RegexQuestion {
-
-    pub fn new_text(text: &str) -> Vec<Text> {
-        let mut text_vec: Vec<Text> = text.chars().map(|c| Text::Lit(c)).collect();
-        text_vec.push(Text::End);
-        text_vec
-    }
-
-    fn parse_pattern(pattern: &str) -> Result<Vec<Patt>, Error> {
+    fn parse_pattern(pattern: &str) -> Result<Pattern, Error> {
         let hir = regex_syntax::parse(pattern)?;
-        let mut items = vec![];
-        Self::parse_impl(&hir, &mut items)?;
-        items.push(Patt::End);
-        Ok(items)
+        Self::pattern(Self::parse_impl(&hir))
     }
 
-    fn parse_impl(hir: &Hir, items: &mut Vec<Patt>) -> Result<usize, Error> {
+    fn pattern(try_elems: Result<Vec<Element>, Error>) -> Result<Pattern, Error> {
+        try_elems.map(|elems| Pattern { elems })
+    }
+
+    fn parse_impl(hir: &Hir) -> Result<Vec<Element>, Error>
+    {
         match hir.kind() {
             HirKind::Literal(Literal(ref bytes)) => {
                 // TODO modify Patt::Lit to use bytes rather then chars. For now, assuming ascii
-                for byte in bytes.iter() {
-                    items.push(Patt::Lit(*byte as char));
-                }
-                Ok(bytes.len())
+                Ok(bytes.iter().map(|b| Element::Match(Match::Lit(*b as char))).collect())
             }
             HirKind::Class(class) => {
-                items.push(Patt::Class(Class::from(class.clone())));
-                Ok(1)
+                Ok(vec![Element::Match(Match::Class(Class::from(class.clone())))])
             }
             HirKind::Capture(Capture { sub, .. }) => {
-                items.push(Patt::GroupStart);
-                let num_children = Self::parse_impl(sub, items)?;
-                items.push(Patt::GroupEnd);
-                Ok(num_children + 2)
+               Self::pattern(Self::parse_impl(sub)).map(|p| vec![Element::Capture(p)])
             }
             HirKind::Alternation(children) => {
                 match &children[..] {
-                    [] => Ok(0),
-                    [left, right @ ..] => Self::parse_alternation_impl(left, right, items),
+                    [] => Ok(vec![]),
+                    [sub] => Self::parse_impl(sub),
+                    [sub1, sub2, subs @ ..] => {
+                        let try_p1 = Self::pattern(Self::parse_impl(sub1));
+                        let try_p2 = Self::pattern(Self::parse_impl(sub2));
+                        let mut try_ps = subs.iter().map(|sub| Self::pattern(Self::parse_impl(sub)));
+
+                        let try_init = try_p1.and_then(|p1| try_p2.map(|p2| Element::Alternative(p1, p2)));
+
+                        let try_alternative = try_init.and_then(|init|
+                            try_ps.try_fold(init, |elem, try_p|
+                                try_p.map(|p| Element::Alternative(Pattern { elems: vec![elem] }, p))
+                            )
+                        );
+
+                        try_alternative.map(|alt| vec![alt])
+                    }
                 }
             }
             HirKind::Repetition(Repetition { min: 0, max: None, sub, .. }) => {
-                let start_ix = items.len();
-                items.push(Patt::RepetitionStart(0)); // replaced with proper offset later
-                let num_children = Self::parse_impl(sub, items)?;
-                let offset = num_children + 1;
-                items[start_ix] = Patt::RepetitionStart(offset);
-                items.push(Patt::RepetitionEnd(offset));
-                Ok(num_children + 2)
+                Self::pattern(Self::parse_impl(sub)).map(|p| vec![Element::Repetition(p)])
             }
-            HirKind::Concat(children) => {
-                let mut sum = 0;
-                for child in children {
-                    sum += Self::parse_impl(child, items)?;
-                }
-                Ok(sum)
+            HirKind::Concat(subs) => {
+                let try_nested: Result<Vec<Vec<Element>>, Error> =
+                    Result::from_iter(subs.iter().map(|sub| Self::parse_impl(sub)));
+                try_nested.map(|nested| nested.into_iter().flatten().collect())
             }
             unsupported => {
                 Err(Error::PatternUnsupported(format!("{:?}", unsupported)))
-            }
-        }
-    }
-
-    fn parse_alternation_impl(left: &Hir, right: &[Hir], items: &mut Vec<Patt>) -> Result<usize, Error> {
-        match right {
-            [] => Self::parse_impl(left, items),
-            [next_left, next_right @ ..] => {
-                let left_ix = items.len();
-                items.push(Patt::AlternativeLeft(0)); // replaced with proper offset later
-                let num_left = Self::parse_impl(left, items)?;
-                let right_ix = items.len();
-                items.push(Patt::AlternativeRight(0)); // replaced with proper offset later
-                let num_right = Self::parse_alternation_impl(next_left, next_right, items)?;
-                let next_ix = items.len();
-
-                items[left_ix] = Patt::AlternativeLeft(right_ix - left_ix);
-                items[right_ix] = Patt::AlternativeRight(next_ix - right_ix);
-
-                Ok(num_left + num_right + 2)
             }
         }
     }
@@ -110,77 +85,50 @@ impl RegexQuestion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_cases::patt_class;
+    use crate::test_cases::{alt, class, capture, lit, lits, rep};
 
     #[test]
     fn parse_lit_1() {
-        parse_test("a", vec![Patt::Lit('a')]);
+        parse_test("a", lits("a"));
     }
 
     #[test]
     fn parse_lit_2() {
-        parse_test("abc", vec![Patt::Lit('a'), Patt::Lit('b'), Patt::Lit('c')]);
+        parse_test("abc", lits("abc"));
     }
 
     #[test]
     fn parse_wildcard() {
-        parse_test(".", vec![patt_class(".")])
+        parse_test(".", vec![class(".")])
     }
 
     #[test]
     fn parse_concat_1() {
-        parse_test("a.", vec![Patt::Lit('a'), patt_class(".")]);
+        parse_test("a.", vec![lit('a'), class(".")]);
     }
 
     #[test]
     fn parse_repetition_1() {
-        parse_test("a*", vec![
-            Patt::RepetitionStart(2),
-            Patt::Lit('a'),
-            Patt::RepetitionEnd(2),
-        ]);
+        parse_test("a*", vec![rep(lits("a"))]);
     }
 
     #[test]
     fn parse_group_1() {
-        parse_test("(a)", vec![Patt::GroupStart, Patt::Lit('a'), Patt::GroupEnd]);
+        parse_test("(a)", vec![capture(lits("a"))]);
     }
 
     #[test]
     fn parse_alternative_1() {
-        parse_test("ab|cd", vec![
-            Patt::AlternativeLeft(3),
-            Patt::Lit('a'),
-            Patt::Lit('b'),
-            Patt::AlternativeRight(3),
-            Patt::Lit('c'),
-            Patt::Lit('d'),
-        ]);
+        parse_test("ab|cd", vec![alt(lits("ab"), lits("cd"))]);
     }
 
     #[test]
     fn parse_alternative_2() {
-        parse_test("ab|cd|wxyz", vec![
-            Patt::AlternativeLeft(3),
-            Patt::Lit('a'),
-            Patt::Lit('b'),
-            Patt::AlternativeRight(9),
-            Patt::AlternativeLeft(3),
-            Patt::Lit('c'),
-            Patt::Lit('d'),
-            Patt::AlternativeRight(5),
-            Patt::Lit('w'),
-            Patt::Lit('x'),
-            Patt::Lit('y'),
-            Patt::Lit('z'),
-        ]);
+        parse_test("ab|cd|wxyz", vec![alt(vec![alt(lits("ab"), lits("cd"))], lits("wxyz"))]);
     }
 
-    fn parse_test(pattern: &str, expected: Vec<Patt>) {
-        // TODO see if we can avoid this unnecesary copying?
-        let mut expected_pattern = expected.clone();
-        expected_pattern.push(Patt::End);
-
+    fn parse_test(pattern: &str, expected_elems: Vec<Element>) {
+        let expected_pattern = Pattern { elems: expected_elems };
         let actual_pattern = RegexQuestion::parse_pattern(&pattern).expect("Cannot parse pattern");
         assert_eq!(expected_pattern, actual_pattern);
     }
