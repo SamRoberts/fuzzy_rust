@@ -1,6 +1,6 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Patt, Problem, Solution, Step, Text};
+use crate::{Patt, Problem, ProblemV2, Solution, Step, Text};
 use crate::error::Error;
 use std::fmt::Debug;
 
@@ -183,8 +183,9 @@ impl <Sln> Solution<Error> for Sln where
         LatticeSolution::trace_lattice(self)
     }
 
-    fn solve(problem: &Problem) -> Result<Self, Error> {
-        LatticeSolution::solve_lattice(problem)
+    fn solve(problem: &ProblemV2) -> Result<Self, Error> {
+        let problem_v1 = Problem::new(problem);
+        LatticeSolution::solve_lattice(&problem_v1)
     }
 }
 

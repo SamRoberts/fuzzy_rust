@@ -65,7 +65,7 @@ pub mod error;
 /// of this API: different Question implementations can do this differently.
 pub trait Question<Error> {
     /// Try to build a [`Problem`].
-    fn ask(&self) -> Result<Problem, Error>;
+    fn ask(&self) -> Result<ProblemV2, Error>;
 }
 
 /// Calculates the optimal solution for a [`Problem`].
@@ -74,7 +74,7 @@ pub trait Question<Error> {
 /// calculated `score` and `trace`. We will probably change this API in the future.
 pub trait Solution<Error> : Sized {
     /// Try to figure out the solution for a [`Problem`].
-    fn solve(problem: &Problem) -> Result<Self, Error>;
+    fn solve(problem: &ProblemV2) -> Result<Self, Error>;
 
     /// Return the final score for the solution.
     ///
@@ -94,7 +94,42 @@ pub trait Solution<Error> : Sized {
 /// If the [`Solution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
-    fn new(problem: &Problem, score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self;
+    fn new(problem: &ProblemV2, score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self;
+}
+
+/// The second version of our Problem API.
+///
+/// This shouldn't co-exist with [`Problem`] for long: just while we replace [`Patt`] with types
+/// that belong to the specific implementations.
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct ProblemV2 {
+    pub pattern: Pattern,
+    pub text: Atoms,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct Pattern {
+    elems: Vec<Element>,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum Element {
+    Match(Match),
+    Capture(Pattern),
+    Repetition(Pattern),
+    Alternative(Pattern, Pattern),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum Match {
+    Lit(char),
+    Class(Class),
+}
+
+// using the term atom as we might eventually match words/lines/etc.
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct Atoms {
+    atoms: Vec<char>,
 }
 
 /// Represents a parsed pattern and the text it is meant to match.
@@ -105,6 +140,70 @@ pub struct Problem {
 
     /// The individual [`Text`] values in the text to match.
     pub text: Vec<Text>,
+}
+
+impl Problem {
+    fn new(problem: &ProblemV2) -> Self {
+        let pattern: Vec<Patt> = Self::pattern_patts(&problem.pattern)
+            .chain(vec![Patt::End])
+            .collect();
+
+        let text: Vec<Text> = problem.text.atoms.iter()
+            .map(|c| Text::Lit(*c))
+            .chain(vec![Text::End])
+            .collect();
+
+        Problem { pattern, text }
+    }
+
+    fn pattern_patts(pattern: &Pattern) -> impl Iterator<Item = Patt> + '_ {
+        pattern.elems.iter().flat_map(|elem| Self::elem_patts(elem))
+    }
+
+    fn elem_patts(elem: &Element) -> Vec<Patt> {
+        match elem {
+            Element::Match(Match::Lit(c)) => vec![Patt::Lit(*c)],
+            Element::Match(Match::Class(class)) => vec![Patt::Class(class.clone())],
+            Element::Capture(p) => {
+                let mut result = vec![];
+                result.push(Patt::GroupStart);
+                result.extend(Self::pattern_patts(p));
+                result.push(Patt::GroupEnd);
+                result
+            }
+            Element::Repetition(p) => {
+                let mut result = vec![];
+                let start_ix = result.len();
+                result.push(Patt::RepetitionStart(0));
+                result.extend(Self::pattern_patts(p));
+                let end_ix = result.len();
+                result.push(Patt::RepetitionEnd(0));
+
+                let off = end_ix - start_ix;
+                result[start_ix] = Patt::RepetitionStart(off);
+                result[end_ix] = Patt::RepetitionEnd(off);
+
+                result
+            }
+            Element::Alternative(p1, p2) => {
+                let mut result = vec![];
+                let left_ix = result.len();
+                result.push(Patt::AlternativeLeft(0));
+                result.extend(Self::pattern_patts(p1));
+                let right_ix = result.len();
+                result.push(Patt::AlternativeRight(0));
+                result.extend(Self::pattern_patts(p2));
+                let next_ix = result.len();
+
+                let left_off = right_ix - left_ix;
+                let right_off = next_ix - right_ix;
+                result[left_ix] = Patt::AlternativeLeft(left_off);
+                result[right_ix] = Patt::AlternativeRight(right_off);
+
+                result
+            }
+        }
+    }
 }
 
 /// An individual element in [`Problem::pattern`].
@@ -224,7 +323,7 @@ pub mod test_cases {
 
     // A test case may or may not have a well defined trace
     pub struct TestCase<Trace> {
-        pub problem: Problem,
+        pub problem: ProblemV2,
         pub score: usize,
         pub trace: Trace
     }
@@ -232,10 +331,7 @@ pub mod test_cases {
     impl TestCase<Vec<Step<Patt, Text>>> {
         pub fn match_empty() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::End],
-                    text:    vec![Text::End],
-                },
+                problem: problem(vec![], ""),
                 score: 0,
                 trace: vec![],
             }
@@ -243,10 +339,7 @@ pub mod test_cases {
 
         pub fn match_lit_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::End],
-                },
+                problem: problem(lits("a"), "a"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -256,10 +349,7 @@ pub mod test_cases {
 
         pub fn match_lit_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::Lit('b'), Text::End],
-                },
+                problem: problem(lits("ab"), "ab"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -270,10 +360,7 @@ pub mod test_cases {
 
         pub fn match_class_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![patt_class("."), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![class(".")], "a"),
                 score: 0,
                 trace: vec![
                     Step::Hit(patt_class("."), Text::Lit('a')),
@@ -283,10 +370,7 @@ pub mod test_cases {
 
         pub fn match_class_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![patt_class("[a-zA-Z]"), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![class("[a-zA-Z]")], "a"),
                 score: 0,
                 trace: vec![
                     Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('a')),
@@ -296,10 +380,7 @@ pub mod test_cases {
 
         pub fn match_class_3() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![patt_class("[a-zA-Z]"), Patt::End],
-                    text:    vec![Text::Lit('X'), Text::End],
-                },
+                problem: problem(vec![class("[a-zA-Z]")], "X"),
                 score: 0,
                 trace: vec![
                     Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('X')),
@@ -309,18 +390,7 @@ pub mod test_cases {
 
         pub fn match_alternative_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![
-                        Patt::AlternativeLeft(3),
-                        Patt::Lit('a'),
-                        Patt::Lit('b'),
-                        Patt::AlternativeRight(3),
-                        Patt::Lit('c'),
-                        Patt::Lit('d'),
-                        Patt::End
-                    ],
-                    text: vec![Text::Lit('a'), Text::Lit('b'), Text::End],
-                },
+                problem: problem(vec![alt(lits("ab"), lits("cd"))], "ab"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -331,18 +401,7 @@ pub mod test_cases {
 
         pub fn match_alternative_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![
-                        Patt::AlternativeLeft(3),
-                        Patt::Lit('a'),
-                        Patt::Lit('b'),
-                        Patt::AlternativeRight(3),
-                        Patt::Lit('c'),
-                        Patt::Lit('d'),
-                        Patt::End
-                    ],
-                    text: vec![Text::Lit('c'), Text::Lit('d'), Text::End],
-                },
+                problem: problem(vec![alt(lits("ab"), lits("cd"))], "cd"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('c'), Text::Lit('c')),
@@ -353,23 +412,13 @@ pub mod test_cases {
 
         pub fn match_alternative_3() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![
-                        Patt::AlternativeLeft(2),
-                        Patt::Lit('a'),
-                        Patt::AlternativeRight(8),
-                        Patt::AlternativeLeft(2),
-                        Patt::Lit('b'),
-                        Patt::AlternativeRight(5),
-                        Patt::AlternativeLeft(2),
-                        Patt::Lit('c'),
-                        Patt::AlternativeRight(2),
-                        Patt::Lit('d'),
-                        Patt::Lit('z'),
-                        Patt::End
+                problem: problem(
+                    vec![
+                        alt(lits("a"), vec![alt(lits("b"), vec![alt(lits("c"), lits("d"))])]),
+                        lit('z')
                     ],
-                    text: vec![Text::Lit('c'), Text::Lit('z'), Text::End],
-                },
+                    "cz"
+                ),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('c'), Text::Lit('c')),
@@ -380,10 +429,7 @@ pub mod test_cases {
 
         pub fn match_repetition_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::RepetitionStart(2), Patt::Lit('a'), Patt::RepetitionEnd(2), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![rep(lits("a"))], "aa"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -394,26 +440,7 @@ pub mod test_cases {
 
         pub fn match_repetition_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![
-                        Patt::RepetitionStart(5),
-                        Patt::Lit('a'),
-                        Patt::RepetitionStart(2),
-                        Patt::Lit('b'),
-                        Patt::RepetitionEnd(2),
-                        Patt::RepetitionEnd(5),
-                        Patt::End
-                    ],
-                    text: vec![
-                        Text::Lit('a'),
-                        Text::Lit('a'),
-                        Text::Lit('b'),
-                        Text::Lit('a'),
-                        Text::Lit('b'),
-                        Text::Lit('b'),
-                        Text::End
-                    ],
-                },
+                problem: problem(vec![rep(vec![lit('a'), rep(lits("b"))])], "aababb"),
                 score: 0,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -428,10 +455,7 @@ pub mod test_cases {
 
         pub fn match_repetition_3() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::RepetitionStart(2), patt_class("[0-9]"), Patt::RepetitionEnd(2), Patt::End],
-                    text:    vec![Text::Lit('0'), Text::Lit('4'), Text::Lit('5'), Text::Lit('1'), Text::End],
-                },
+                problem: problem(vec![rep(vec![class("[0-9]")])], "0451"),
                 score: 0,
                 trace: vec![
                     Step::Hit(patt_class("[0-9]"), Text::Lit('0')),
@@ -444,10 +468,7 @@ pub mod test_cases {
 
         pub fn fail_empty_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::End],
-                    text:    vec![Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![], "a"),
                 score: 1,
                 trace: vec![
                     Step::SkipText(Text::Lit('a')),
@@ -457,10 +478,7 @@ pub mod test_cases {
 
         pub fn fail_empty_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::End],
-                    text:    vec![Text::End],
-                },
+                problem: problem(lits("a"), ""),
                 score: 1,
                 trace: vec![
                     Step::SkipPattern(Patt::Lit('a')),
@@ -470,10 +488,7 @@ pub mod test_cases {
 
         pub fn fail_lit_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-                },
+                problem: problem(lits("a"), "aa"),
                 score: 1,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -484,10 +499,7 @@ pub mod test_cases {
 
         pub fn fail_lit_2() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::Lit('a'), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::Lit('a'), Text::End],
-                },
+                problem: problem(lits("aba"), "aa"),
                 score: 1,
                 trace: vec![
                     Step::Hit(Patt::Lit('a'), Text::Lit('a')),
@@ -499,10 +511,7 @@ pub mod test_cases {
 
         pub fn fail_lit_3() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::Lit('a'), Patt::Lit('b'), Patt::Lit('c'), Patt::Lit('d'), Patt::Lit('e'), Patt::End],
-                    text:    vec![Text::Lit('z'), Text::Lit('a'), Text::Lit('b'), Text::Lit('k'), Text::Lit('e'), Text::End],
-                },
+                problem: problem(lits("abcde"), "zabke"),
                 score: 4,
                 trace: vec![
                     Step::SkipText(Text::Lit('z')),
@@ -519,10 +528,7 @@ pub mod test_cases {
 
         pub fn fail_class_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![patt_class("[^a]"), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![class("[^a]")], "a"),
                 score: 2,
                 trace: vec![
                     // TODO handle valid possibility that the order of next two steps is reversed
@@ -534,18 +540,7 @@ pub mod test_cases {
 
         pub fn fail_alternative_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![
-                        Patt::AlternativeLeft(3),
-                        Patt::Lit('a'),
-                        Patt::Lit('b'),
-                        Patt::AlternativeRight(3),
-                        Patt::Lit('c'),
-                        Patt::Lit('d'),
-                        Patt::End
-                    ],
-                    text: vec![Text::Lit('a'), Text::Lit('c'), Text::Lit('d'), Text::End],
-                },
+                problem: problem(vec![alt(lits("ab"), lits("cd"))], "acd"),
                 score: 1,
                 trace: vec![
                     Step::SkipText(Text::Lit('a')),
@@ -560,10 +555,7 @@ pub mod test_cases {
     impl TestCase<()> {
         pub fn fail_repetition_1() -> Self {
             Self {
-                problem: Problem {
-                    pattern: vec![Patt::RepetitionStart(2), Patt::Lit('a'), Patt::RepetitionEnd(2), Patt::End],
-                    text:    vec![Text::Lit('a'), Text::Lit('b'), Text::Lit('a'), Text::End],
-                },
+                problem: problem(vec![rep(lits("a"))], "aba"),
                 score: 1,
                 trace: (),
             }
@@ -577,5 +569,42 @@ pub mod test_cases {
         };
 
         Patt::Class(Class::from(wildcard_class))
+    }
+
+    pub fn problem(elems: Vec<Element>, text: &str) -> ProblemV2 {
+        let atoms = text.chars().collect();
+        ProblemV2 {
+            pattern: Pattern { elems },
+            text:    Atoms { atoms },
+        }
+    }
+
+    pub fn lits(cs: &str) -> Vec<Element> {
+        cs.chars().map(|c| lit(c)).collect()
+    }
+
+    pub fn lit(c: char) -> Element {
+        Element::Match(Match::Lit(c))
+    }
+
+    pub fn class(regex: &str) -> Element {
+        let wildcard_class = match regex_syntax::parse(regex).unwrap().into_kind() {
+            HirKind::Class(c) => c,
+            unsupported => panic!("Unexpected regex_syntax for class: {:?}", unsupported),
+        };
+
+        Element::Match(Match::Class(Class::from(wildcard_class)))
+    }
+
+    pub fn rep(elems: Vec<Element>) -> Element {
+        Element::Repetition(Pattern { elems })
+    }
+
+    pub fn alt(left: Vec<Element>, right: Vec<Element>) -> Element {
+        Element::Alternative(Pattern { elems: left }, Pattern { elems: right })
+    }
+
+    pub fn capture(elems: Vec<Element>) -> Element {
+        Element::Capture(Pattern { elems })
     }
 }
