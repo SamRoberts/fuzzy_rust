@@ -35,7 +35,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
     fn trace_lattice(&self) -> &Vec<Step<Patt, Text>>;
 
     /// [`Solution::solve`] implementation.
-    fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
+    fn solve_lattice(problem: &ProblemV2) -> Result<Self, Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
 
@@ -197,13 +197,12 @@ impl <Sln> Solution<Error> for Sln where
     }
 
     fn solve(problem: &ProblemV2) -> Result<Self, Error> {
-        let problem_v1 = Problem::new(problem);
-        LatticeSolution::solve_lattice(&problem_v1)
+        LatticeSolution::solve_lattice(&problem)
     }
 }
 
 pub trait LatticeConfig<Ix> {
-    fn new(problem: &Problem) -> Self;
+    fn new(problem: &ProblemV2) -> Self;
     fn get(&self, ix: Ix) -> (&Patt, &Text);
 
     fn start(&self) -> Ix;
@@ -233,28 +232,49 @@ pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized {
     fn can_restart(&self) -> bool;
 }
 
-/// Represents a parsed pattern and the text it is meant to match.
-#[derive(Clone, Debug)]
-pub struct Problem {
-    /// The individual [`Patt`] values in the parsed pattern.
-    pub pattern: Vec<Patt>,
-
-    /// The individual [`Text`] values in the text to match.
-    pub text: Vec<Text>,
+/// An individual element in [`Problem::pattern`].
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum Patt {
+    /// Matches a specific character.
+    ///
+    /// Although this API implies this crate operates on unicode characters, the current code
+    /// sometimes naively converts bytes to characters, assuming ASCII.
+    Lit(char),
+    /// Matches a class of characters, e.g. `.` or `[a-z]`.
+    Class(Class),
+    GroupStart,
+    GroupEnd,
+    /// Starts the first branch of an alternation.
+    ///
+    /// This stores the offset between this item and the corresponding
+    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
+    AlternativeLeft(usize),
+    /// Starts the second branch of an alternation.
+    ///
+    /// This stores the offset between this item and the element immediately after the alternation.
+    AlternativeRight(usize),
+    /// Starts a repetition.
+    ///
+    /// This stores the offset between this item and the corresponding future
+    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
+    RepetitionStart(usize),
+    /// Ends a repetition.
+    ///
+    /// This stores the offset between this item and the corresponding past
+    /// [`RepetitionStart`](Patt::RepetitionStart) item.
+    RepetitionEnd(usize),
+    /// Ends the pattern.
+    ///
+    /// Although this is redundant, fuzzy currently requires the pattern vector to end with
+    /// this value. We will probably remove it in the future.
+    End,
 }
 
-impl Problem {
-    fn new(problem: &ProblemV2) -> Self {
-        let pattern: Vec<Patt> = Self::pattern_patts(&problem.pattern)
+impl Patt {
+    pub fn extract(problem: &ProblemV2) -> Vec<Self> {
+        Self::pattern_patts(&problem.pattern)
             .chain(vec![Patt::End])
-            .collect();
-
-        let text: Vec<Text> = problem.text.atoms.iter()
-            .map(|c| Text::Lit(*c))
-            .chain(vec![Text::End])
-            .collect();
-
-        Problem { pattern, text }
+            .collect()
     }
 
     fn pattern_patts(pattern: &Pattern) -> impl Iterator<Item = Patt> + '_ {
@@ -307,44 +327,6 @@ impl Problem {
     }
 }
 
-/// An individual element in [`Problem::pattern`].
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Patt {
-    /// Matches a specific character.
-    ///
-    /// Although this API implies this crate operates on unicode characters, the current code
-    /// sometimes naively converts bytes to characters, assuming ASCII.
-    Lit(char),
-    /// Matches a class of characters, e.g. `.` or `[a-z]`.
-    Class(Class),
-    GroupStart,
-    GroupEnd,
-    /// Starts the first branch of an alternation.
-    ///
-    /// This stores the offset between this item and the corresponding
-    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
-    AlternativeLeft(usize),
-    /// Starts the second branch of an alternation.
-    ///
-    /// This stores the offset between this item and the element immediately after the alternation.
-    AlternativeRight(usize),
-    /// Starts a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding future
-    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
-    RepetitionStart(usize),
-    /// Ends a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding past
-    /// [`RepetitionStart`](Patt::RepetitionStart) item.
-    RepetitionEnd(usize),
-    /// Ends the pattern.
-    ///
-    /// Although this is redundant, fuzzy currently requires the pattern vector to end with
-    /// this value. We will probably remove it in the future.
-    End,
-}
-
 /// An individual element in [`Problem::text`].
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Text {
@@ -358,6 +340,15 @@ pub enum Text {
     /// Although this is redundant, fuzzy currently requires the text vector to end with
     /// this value. We will probably remove it in the future.
     End
+}
+
+impl Text {
+    pub fn extract(problem: &ProblemV2) -> Vec<Self> {
+        problem.text.atoms.iter()
+            .map(|c| Text::Lit(*c))
+            .chain(vec![Text::End])
+            .collect()
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
