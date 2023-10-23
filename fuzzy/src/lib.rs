@@ -28,7 +28,7 @@
 //!     let question = RegexQuestion { pattern_regex, text };
 //!     let problem = question.ask()?;
 //!     let solution = TableSolution::solve(&problem)?;
-//!     let output = DiffOutput::new(&problem, solution.score(), solution.trace());
+//!     let output = DiffOutput::new(&problem, &solution.score(), &solution.trace());
 //!     println!("{}", output);
 //!     Ok(())
 //! }
@@ -76,13 +76,16 @@ pub trait Solution<Error> : Sized {
     /// Try to figure out the solution for a [`Problem`].
     fn solve(problem: &ProblemV2) -> Result<Self, Error>;
 
+    // TODO while we are still converting Patt/Text to Match/char, it's temporarily convenient to
+    // make these methods return data structures owned by the caller. Will revert later.
+
     /// Return the final score for the solution.
     ///
     /// This score represents the cost of mismatches: `0` is best, higher worse.
-    fn score(&self) -> &usize;
+    fn score(&self) -> usize;
 
     /// Return the [`Step`]s followed by the optimal match between pattern and text.
-    fn trace(&self) -> &Vec<Step<Patt, Text>>;
+    fn trace(&self) -> Vec<Step<Match, char>>;
 }
 
 /// Displays the final solution.
@@ -94,7 +97,7 @@ pub trait Solution<Error> : Sized {
 /// If the [`Solution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
-    fn new(problem: &ProblemV2, score: &usize, trace: &Vec<Step<Patt, Text>>) -> Self;
+    fn new(problem: &ProblemV2, score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
 }
 
 /// The second version of our Problem API.
@@ -132,118 +135,6 @@ pub struct Atoms {
     atoms: Vec<char>,
 }
 
-/// Represents a parsed pattern and the text it is meant to match.
-#[derive(Clone, Debug)]
-pub struct Problem {
-    /// The individual [`Patt`] values in the parsed pattern.
-    pub pattern: Vec<Patt>,
-
-    /// The individual [`Text`] values in the text to match.
-    pub text: Vec<Text>,
-}
-
-impl Problem {
-    fn new(problem: &ProblemV2) -> Self {
-        let pattern: Vec<Patt> = Self::pattern_patts(&problem.pattern)
-            .chain(vec![Patt::End])
-            .collect();
-
-        let text: Vec<Text> = problem.text.atoms.iter()
-            .map(|c| Text::Lit(*c))
-            .chain(vec![Text::End])
-            .collect();
-
-        Problem { pattern, text }
-    }
-
-    fn pattern_patts(pattern: &Pattern) -> impl Iterator<Item = Patt> + '_ {
-        pattern.elems.iter().flat_map(|elem| Self::elem_patts(elem))
-    }
-
-    fn elem_patts(elem: &Element) -> Vec<Patt> {
-        match elem {
-            Element::Match(Match::Lit(c)) => vec![Patt::Lit(*c)],
-            Element::Match(Match::Class(class)) => vec![Patt::Class(class.clone())],
-            Element::Capture(p) => {
-                let mut result = vec![];
-                result.push(Patt::GroupStart);
-                result.extend(Self::pattern_patts(p));
-                result.push(Patt::GroupEnd);
-                result
-            }
-            Element::Repetition(p) => {
-                let mut result = vec![];
-                let start_ix = result.len();
-                result.push(Patt::RepetitionStart(0));
-                result.extend(Self::pattern_patts(p));
-                let end_ix = result.len();
-                result.push(Patt::RepetitionEnd(0));
-
-                let off = end_ix - start_ix;
-                result[start_ix] = Patt::RepetitionStart(off);
-                result[end_ix] = Patt::RepetitionEnd(off);
-
-                result
-            }
-            Element::Alternative(p1, p2) => {
-                let mut result = vec![];
-                let left_ix = result.len();
-                result.push(Patt::AlternativeLeft(0));
-                result.extend(Self::pattern_patts(p1));
-                let right_ix = result.len();
-                result.push(Patt::AlternativeRight(0));
-                result.extend(Self::pattern_patts(p2));
-                let next_ix = result.len();
-
-                let left_off = right_ix - left_ix;
-                let right_off = next_ix - right_ix;
-                result[left_ix] = Patt::AlternativeLeft(left_off);
-                result[right_ix] = Patt::AlternativeRight(right_off);
-
-                result
-            }
-        }
-    }
-}
-
-/// An individual element in [`Problem::pattern`].
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Patt {
-    /// Matches a specific character.
-    ///
-    /// Although this API implies this crate operates on unicode characters, the current code
-    /// sometimes naively converts bytes to characters, assuming ASCII.
-    Lit(char),
-    /// Matches a class of characters, e.g. `.` or `[a-z]`.
-    Class(Class),
-    GroupStart,
-    GroupEnd,
-    /// Starts the first branch of an alternation.
-    ///
-    /// This stores the offset between this item and the corresponding
-    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
-    AlternativeLeft(usize),
-    /// Starts the second branch of an alternation.
-    ///
-    /// This stores the offset between this item and the element immediately after the alternation.
-    AlternativeRight(usize),
-    /// Starts a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding future
-    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
-    RepetitionStart(usize),
-    /// Ends a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding past
-    /// [`RepetitionStart`](Patt::RepetitionStart) item.
-    RepetitionEnd(usize),
-    /// Ends the pattern.
-    ///
-    /// Although this is redundant, fuzzy currently requires the pattern vector to end with
-    /// this value. We will probably remove it in the future.
-    End,
-}
-
 /// Represents a class of characters, e.g. `.` or `[a-z]`.
 ///
 /// Currently we implement this by re-using
@@ -277,21 +168,6 @@ impl Class {
     }
 }
 
-/// An individual element in [`Problem::text`].
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Text {
-    /// A character.
-    ///
-    /// Although this API implies the crate operates on unicode characters, the current code
-    /// sometimes naively converts bytes to characters, assuming ASCII.
-    Lit(char),
-    /// Ends the text.
-    ///
-    /// Although this is redundant, fuzzy currently requires the text vector to end with
-    /// this value. We will probably remove it in the future.
-    End
-}
-
 /// An individual element in [`Solution::trace`].
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum Step<P, T> {
@@ -305,15 +181,20 @@ pub enum Step<P, T> {
 }
 
 impl <P, T> Step<P, T> {
-    fn with<Q, U>(&self, q: Q, u: U) -> Step<Q, U> {
+    fn with<Q: Clone, U: Clone>(&self, q: &Q, u: &U) -> Step<Q, U> {
+        self.map(|_| q.clone(), |_| u.clone())
+    }
+
+    fn map<Q, U, FQ: Fn(&P) -> Q, FU: Fn(&T) -> U>(&self, fq: FQ, fu: FU) -> Step<Q, U> {
         match self {
-            Self::Hit(_, _) => Step::Hit(q, u),
-            Self::SkipPattern(_) => Step::SkipPattern(q),
-            Self::SkipText(_) => Step::SkipText(u),
+            Self::Hit(p, t) => Step::Hit(fq(p), fu(t)),
+            Self::SkipPattern(p) => Step::SkipPattern(fq(p)),
+            Self::SkipText(t) => Step::SkipText(fu(t)),
             Self::StartCapture => Step::StartCapture,
             Self::StopCapture => Step::StopCapture,
         }
     }
+
 }
 
 #[cfg(test)]
@@ -328,7 +209,7 @@ pub mod test_cases {
         pub trace: Trace
     }
 
-    impl TestCase<Vec<Step<Patt, Text>>> {
+    impl TestCase<Vec<Step<Match, char>>> {
         pub fn match_empty() -> Self {
             Self {
                 problem: problem(vec![], ""),
@@ -342,7 +223,7 @@ pub mod test_cases {
                 problem: problem(lits("a"), "a"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Match::Lit('a'), 'a'),
                 ],
             }
         }
@@ -352,8 +233,8 @@ pub mod test_cases {
                 problem: problem(lits("ab"), "ab"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
                 ],
             }
         }
@@ -363,7 +244,7 @@ pub mod test_cases {
                 problem: problem(vec![class(".")], "a"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(patt_class("."), Text::Lit('a')),
+                    Step::Hit(patt_class("."), 'a'),
                 ],
             }
         }
@@ -373,7 +254,7 @@ pub mod test_cases {
                 problem: problem(vec![class("[a-zA-Z]")], "a"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('a')),
+                    Step::Hit(patt_class("[a-zA-Z]"), 'a'),
                 ],
             }
         }
@@ -383,7 +264,7 @@ pub mod test_cases {
                 problem: problem(vec![class("[a-zA-Z]")], "X"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(patt_class("[a-zA-Z]"), Text::Lit('X')),
+                    Step::Hit(patt_class("[a-zA-Z]"), 'X'),
                 ],
             }
         }
@@ -393,8 +274,8 @@ pub mod test_cases {
                 problem: problem(vec![alt(lits("ab"), lits("cd"))], "ab"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
                 ],
             }
         }
@@ -404,8 +285,8 @@ pub mod test_cases {
                 problem: problem(vec![alt(lits("ab"), lits("cd"))], "cd"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
-                    Step::Hit(Patt::Lit('d'), Text::Lit('d')),
+                    Step::Hit(Match::Lit('c'), 'c'),
+                    Step::Hit(Match::Lit('d'), 'd'),
                 ],
             }
         }
@@ -421,8 +302,8 @@ pub mod test_cases {
                 ),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
-                    Step::Hit(Patt::Lit('z'), Text::Lit('z')),
+                    Step::Hit(Match::Lit('c'), 'c'),
+                    Step::Hit(Match::Lit('z'), 'z'),
                 ],
             }
         }
@@ -432,8 +313,8 @@ pub mod test_cases {
                 problem: problem(vec![rep(lits("a"))], "aa"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
                 ],
             }
         }
@@ -443,12 +324,12 @@ pub mod test_cases {
                 problem: problem(vec![rep(vec![lit('a'), rep(lits("b"))])], "aababb"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
+                    Step::Hit(Match::Lit('b'), 'b'),
                 ],
             }
         }
@@ -458,10 +339,10 @@ pub mod test_cases {
                 problem: problem(vec![rep(vec![class("[0-9]")])], "0451"),
                 score: 0,
                 trace: vec![
-                    Step::Hit(patt_class("[0-9]"), Text::Lit('0')),
-                    Step::Hit(patt_class("[0-9]"), Text::Lit('4')),
-                    Step::Hit(patt_class("[0-9]"), Text::Lit('5')),
-                    Step::Hit(patt_class("[0-9]"), Text::Lit('1')),
+                    Step::Hit(patt_class("[0-9]"), '0'),
+                    Step::Hit(patt_class("[0-9]"), '4'),
+                    Step::Hit(patt_class("[0-9]"), '5'),
+                    Step::Hit(patt_class("[0-9]"), '1'),
                 ],
             }
         }
@@ -471,7 +352,7 @@ pub mod test_cases {
                 problem: problem(vec![], "a"),
                 score: 1,
                 trace: vec![
-                    Step::SkipText(Text::Lit('a')),
+                    Step::SkipText('a'),
                 ],
             }
         }
@@ -481,7 +362,7 @@ pub mod test_cases {
                 problem: problem(lits("a"), ""),
                 score: 1,
                 trace: vec![
-                    Step::SkipPattern(Patt::Lit('a')),
+                    Step::SkipPattern(Match::Lit('a')),
                 ],
             }
         }
@@ -491,8 +372,8 @@ pub mod test_cases {
                 problem: problem(lits("a"), "aa"),
                 score: 1,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::SkipText(Text::Lit('a')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipText('a'),
                 ],
             }
         }
@@ -502,9 +383,9 @@ pub mod test_cases {
                 problem: problem(lits("aba"), "aa"),
                 score: 1,
                 trace: vec![
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::SkipPattern(Patt::Lit('b')),
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipPattern(Match::Lit('b')),
+                    Step::Hit(Match::Lit('a'), 'a'),
                 ],
             }
         }
@@ -514,14 +395,14 @@ pub mod test_cases {
                 problem: problem(lits("abcde"), "zabke"),
                 score: 4,
                 trace: vec![
-                    Step::SkipText(Text::Lit('z')),
-                    Step::Hit(Patt::Lit('a'), Text::Lit('a')),
-                    Step::Hit(Patt::Lit('b'), Text::Lit('b')),
+                    Step::SkipText('z'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
                     // TODO handle valid possibility that the order of next three steps is changed
-                    Step::SkipText(Text::Lit('k')),
-                    Step::SkipPattern(Patt::Lit('c')),
-                    Step::SkipPattern(Patt::Lit('d')),
-                    Step::Hit(Patt::Lit('e'), Text::Lit('e')),
+                    Step::SkipText('k'),
+                    Step::SkipPattern(Match::Lit('c')),
+                    Step::SkipPattern(Match::Lit('d')),
+                    Step::Hit(Match::Lit('e'), 'e'),
                 ],
             }
         }
@@ -532,7 +413,7 @@ pub mod test_cases {
                 score: 2,
                 trace: vec![
                     // TODO handle valid possibility that the order of next two steps is reversed
-                    Step::SkipText(Text::Lit('a')),
+                    Step::SkipText('a'),
                     Step::SkipPattern(patt_class("[^a]")),
                 ],
             }
@@ -543,9 +424,9 @@ pub mod test_cases {
                 problem: problem(vec![alt(lits("ab"), lits("cd"))], "acd"),
                 score: 1,
                 trace: vec![
-                    Step::SkipText(Text::Lit('a')),
-                    Step::Hit(Patt::Lit('c'), Text::Lit('c')),
-                    Step::Hit(Patt::Lit('d'), Text::Lit('d')),
+                    Step::SkipText('a'),
+                    Step::Hit(Match::Lit('c'), 'c'),
+                    Step::Hit(Match::Lit('d'), 'd'),
                 ],
             }
         }
@@ -562,13 +443,13 @@ pub mod test_cases {
         }
     }
 
-    pub fn patt_class(regex: &str) -> Patt {
+    pub fn patt_class(regex: &str) -> Match {
         let wildcard_class = match regex_syntax::parse(regex).unwrap().into_kind() {
             HirKind::Class(c) => c,
             unsupported => panic!("Unexpected regex_syntax for class: {:?}", unsupported),
         };
 
-        Patt::Class(Class::from(wildcard_class))
+        Match::Class(Class::from(wildcard_class))
     }
 
     pub fn problem(elems: Vec<Element>, text: &str) -> ProblemV2 {

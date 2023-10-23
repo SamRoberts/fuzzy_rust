@@ -3,8 +3,8 @@
 //! This implementation uses a [map](State) to store state for each [node](Ix), so it should be
 //! easy to change node representation and expand the state space over time.
 
-use crate::{Patt, Problem, Step, Text};
-use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
+use crate::Step;
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Problem, Text};
 use std::collections::hash_map::HashMap;
 
 #[derive(Eq, PartialEq, Debug)]

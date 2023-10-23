@@ -55,8 +55,8 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
 
     let problem = RegexQuestion { pattern_regex: args.pattern, text: args.text }.ask()?;
     let solution = TableSolution::solve(&problem)?;
-    let output = DiffOutput::new(&problem, solution.score(), solution.trace());
-    let body = Out { score: *solution.score(), trace: OutChunk::from(&output.chunks) };
+    let output = DiffOutput::new(&problem, &solution.score(), &solution.trace());
+    let body = Out { score: solution.score(), trace: OutChunk::from(&output.chunks) };
     let body_json = serde_json::to_string(&body)?;
 
     let resp = Response::builder()
