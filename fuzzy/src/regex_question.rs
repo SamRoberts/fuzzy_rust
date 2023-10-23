@@ -7,7 +7,7 @@
 
 use regex_syntax;
 use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
-use crate::{Atoms, Class, Element, Match, Pattern, ProblemV2, Question};
+use crate::{Atoms, Class, Element, Match, Pattern, Problem, Question};
 use crate::error::Error;
 
 pub struct RegexQuestion {
@@ -16,10 +16,10 @@ pub struct RegexQuestion {
 }
 
 impl Question<Error> for RegexQuestion {
-    fn ask(&self) -> Result<ProblemV2, Error> {
+    fn ask(&self) -> Result<Problem, Error> {
         let pattern = Self::parse_pattern(&self.pattern_regex)?;
         let text = Atoms { atoms: self.text.chars().collect() };
-        Ok(ProblemV2 { pattern, text })
+        Ok(Problem { pattern, text })
     }
 }
 

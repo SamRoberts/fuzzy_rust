@@ -1,6 +1,6 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Class, Element, Match, Pattern, ProblemV2, Solution, Step};
+use crate::{Class, Element, Match, Pattern, Problem, Solution, Step};
 use crate::error::Error;
 use std::fmt::Debug;
 
@@ -35,7 +35,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
     fn trace_lattice(&self) -> &Vec<Step<Patt, Text>>;
 
     /// [`Solution::solve`] implementation.
-    fn solve_lattice(problem: &ProblemV2) -> Result<Self, Error> {
+    fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
 
@@ -196,13 +196,13 @@ impl <Sln> Solution<Error> for Sln where
             .collect()
     }
 
-    fn solve(problem: &ProblemV2) -> Result<Self, Error> {
+    fn solve(problem: &Problem) -> Result<Self, Error> {
         LatticeSolution::solve_lattice(&problem)
     }
 }
 
 pub trait LatticeConfig<Ix> {
-    fn new(problem: &ProblemV2) -> Self;
+    fn new(problem: &Problem) -> Self;
     fn get(&self, ix: Ix) -> (&Patt, &Text);
 
     fn start(&self) -> Ix;
@@ -271,7 +271,7 @@ pub enum Patt {
 }
 
 impl Patt {
-    pub fn extract(problem: &ProblemV2) -> Vec<Self> {
+    pub fn extract(problem: &Problem) -> Vec<Self> {
         Self::pattern_patts(&problem.pattern)
             .chain(vec![Patt::End])
             .collect()
@@ -343,7 +343,7 @@ pub enum Text {
 }
 
 impl Text {
-    pub fn extract(problem: &ProblemV2) -> Vec<Self> {
+    pub fn extract(problem: &Problem) -> Vec<Self> {
         problem.text.atoms.iter()
             .map(|c| Text::Lit(*c))
             .chain(vec![Text::End])

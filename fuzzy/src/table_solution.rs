@@ -4,7 +4,7 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{ProblemV2, Step};
+use crate::{Problem, Step};
 use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
 
 #[derive(Eq, PartialEq, Debug)]
@@ -56,7 +56,7 @@ pub struct Config {
 }
 
 impl LatticeConfig<Ix> for Config {
-    fn new(problem: &ProblemV2) -> Self {
+    fn new(problem: &Problem) -> Self {
         let pattern = Patt::extract(problem);
         let text = Text::extract(problem);
         let (expanded_pattern_len, expanded_offsets) = Self::expand(&pattern);
