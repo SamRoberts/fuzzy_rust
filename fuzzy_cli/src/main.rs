@@ -40,7 +40,7 @@ fn main() -> Result<(), Error> {
 fn main_impl<Q: Question<Error>, S: Solution<Error>, O: Output>(question: Q) -> Result<(), Error> {
     let problem = question.ask()?;
     let solution = S::solve(&problem)?;
-    let output = O::new(&problem, solution.score(), solution.trace());
+    let output = O::new(&problem, &solution.score(), &solution.trace());
     println!("{}", output);
 
     Ok(())

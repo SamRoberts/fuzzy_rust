@@ -1,6 +1,6 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Patt, Problem, ProblemV2, Solution, Step, Text};
+use crate::{Class, Element, Match, Pattern, ProblemV2, Solution, Step};
 use crate::error::Error;
 use std::fmt::Debug;
 
@@ -56,7 +56,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
             if from == end_ix { break; }
             for step in done.step.iter() {
                 let (patt, text) = conf.get(from);
-                trace.push(step.with(patt.clone(), text.clone()));
+                trace.push(step.with(patt, text));
             }
             from = done.next;
         }
@@ -175,12 +175,25 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 impl <Sln> Solution<Error> for Sln where
     Sln: LatticeSolution,
 {
-    fn score(&self) -> &usize {
-        LatticeSolution::score_lattice(self)
+    fn score(&self) -> usize {
+        *LatticeSolution::score_lattice(self)
     }
 
-    fn trace(&self) -> &Vec<Step<Patt, Text>> {
-        LatticeSolution::trace_lattice(self)
+    fn trace(&self) -> Vec<Step<Match, char>> {
+        // TODO temporarily keeping Patt/Text for implementations
+        LatticeSolution::trace_lattice(self).into_iter()
+            .map(|step| step.map(
+                |p| match p {
+                    Patt::Lit(c)   => Match::Lit(*c),
+                    Patt::Class(c) => Match::Class(c.clone()),
+                    unexpected     => panic!("Unexpected trace pattern {:?}", unexpected),
+                },
+                |t| match  t {
+                    Text::Lit(c) => *c,
+                    unexpected   => panic!("Unexpected trace text {:?}", unexpected),
+                }
+            ))
+            .collect()
     }
 
     fn solve(problem: &ProblemV2) -> Result<Self, Error> {
@@ -218,6 +231,133 @@ pub trait LatticeState<Conf, Ix> {
 
 pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized {
     fn can_restart(&self) -> bool;
+}
+
+/// Represents a parsed pattern and the text it is meant to match.
+#[derive(Clone, Debug)]
+pub struct Problem {
+    /// The individual [`Patt`] values in the parsed pattern.
+    pub pattern: Vec<Patt>,
+
+    /// The individual [`Text`] values in the text to match.
+    pub text: Vec<Text>,
+}
+
+impl Problem {
+    fn new(problem: &ProblemV2) -> Self {
+        let pattern: Vec<Patt> = Self::pattern_patts(&problem.pattern)
+            .chain(vec![Patt::End])
+            .collect();
+
+        let text: Vec<Text> = problem.text.atoms.iter()
+            .map(|c| Text::Lit(*c))
+            .chain(vec![Text::End])
+            .collect();
+
+        Problem { pattern, text }
+    }
+
+    fn pattern_patts(pattern: &Pattern) -> impl Iterator<Item = Patt> + '_ {
+        pattern.elems.iter().flat_map(|elem| Self::elem_patts(elem))
+    }
+
+    fn elem_patts(elem: &Element) -> Vec<Patt> {
+        match elem {
+            Element::Match(Match::Lit(c)) => vec![Patt::Lit(*c)],
+            Element::Match(Match::Class(class)) => vec![Patt::Class(class.clone())],
+            Element::Capture(p) => {
+                let mut result = vec![];
+                result.push(Patt::GroupStart);
+                result.extend(Self::pattern_patts(p));
+                result.push(Patt::GroupEnd);
+                result
+            }
+            Element::Repetition(p) => {
+                let mut result = vec![];
+                let start_ix = result.len();
+                result.push(Patt::RepetitionStart(0));
+                result.extend(Self::pattern_patts(p));
+                let end_ix = result.len();
+                result.push(Patt::RepetitionEnd(0));
+
+                let off = end_ix - start_ix;
+                result[start_ix] = Patt::RepetitionStart(off);
+                result[end_ix] = Patt::RepetitionEnd(off);
+
+                result
+            }
+            Element::Alternative(p1, p2) => {
+                let mut result = vec![];
+                let left_ix = result.len();
+                result.push(Patt::AlternativeLeft(0));
+                result.extend(Self::pattern_patts(p1));
+                let right_ix = result.len();
+                result.push(Patt::AlternativeRight(0));
+                result.extend(Self::pattern_patts(p2));
+                let next_ix = result.len();
+
+                let left_off = right_ix - left_ix;
+                let right_off = next_ix - right_ix;
+                result[left_ix] = Patt::AlternativeLeft(left_off);
+                result[right_ix] = Patt::AlternativeRight(right_off);
+
+                result
+            }
+        }
+    }
+}
+
+/// An individual element in [`Problem::pattern`].
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum Patt {
+    /// Matches a specific character.
+    ///
+    /// Although this API implies this crate operates on unicode characters, the current code
+    /// sometimes naively converts bytes to characters, assuming ASCII.
+    Lit(char),
+    /// Matches a class of characters, e.g. `.` or `[a-z]`.
+    Class(Class),
+    GroupStart,
+    GroupEnd,
+    /// Starts the first branch of an alternation.
+    ///
+    /// This stores the offset between this item and the corresponding
+    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
+    AlternativeLeft(usize),
+    /// Starts the second branch of an alternation.
+    ///
+    /// This stores the offset between this item and the element immediately after the alternation.
+    AlternativeRight(usize),
+    /// Starts a repetition.
+    ///
+    /// This stores the offset between this item and the corresponding future
+    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
+    RepetitionStart(usize),
+    /// Ends a repetition.
+    ///
+    /// This stores the offset between this item and the corresponding past
+    /// [`RepetitionStart`](Patt::RepetitionStart) item.
+    RepetitionEnd(usize),
+    /// Ends the pattern.
+    ///
+    /// Although this is redundant, fuzzy currently requires the pattern vector to end with
+    /// this value. We will probably remove it in the future.
+    End,
+}
+
+/// An individual element in [`Problem::text`].
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum Text {
+    /// A character.
+    ///
+    /// Although this API implies the crate operates on unicode characters, the current code
+    /// sometimes naively converts bytes to characters, assuming ASCII.
+    Lit(char),
+    /// Ends the text.
+    ///
+    /// Although this is redundant, fuzzy currently requires the text vector to end with
+    /// this value. We will probably remove it in the future.
+    End
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -332,14 +472,14 @@ pub mod tests {
         test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_repetition_1());
     }
 
-    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Patt, Text>>>) {
+    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Match, char>>>) {
         let actual = Sln::solve(&test_case.problem).unwrap();
-        assert_eq!(test_case.score, *actual.score());
-        assert_eq!(test_case.trace, *actual.trace());
+        assert_eq!(test_case.score, actual.score());
+        assert_eq!(test_case.trace, actual.trace());
     }
 
     pub fn test_solve_for_test_case_with_ambiguous_trace<Sln: LatticeSolution>(test_case: TestCase<()>) {
         let actual = Sln::solve(&test_case.problem).unwrap();
-        assert_eq!(test_case.score, *actual.score());
+        assert_eq!(test_case.score, actual.score());
     }
 }
