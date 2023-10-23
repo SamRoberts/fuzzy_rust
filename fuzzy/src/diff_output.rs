@@ -1,6 +1,6 @@
 //! Provides an implementation of [`Output`] that mimics git's character-level diff.
 
-use crate::{Output, Match, ProblemV2, Step};
+use crate::{Output, Match, Problem, Step};
 use std::fmt;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
@@ -49,7 +49,7 @@ pub struct Same { pub text: Vec<char> }
 pub struct Diff { pub taken: Vec<char>, pub added: Vec<char> }
 
 impl Output for DiffOutput {
-    fn new(_problem: &ProblemV2, _score: &usize, trace: &Vec<Step<Match, char>>) -> Self {
+    fn new(_problem: &Problem, _score: &usize, trace: &Vec<Step<Match, char>>) -> Self {
         let mut chunks = vec![];
         for step in trace.iter() {
             let current_chunk = chunks.last_mut();

@@ -3,7 +3,7 @@
 //! This implementation uses a [map](State) to store state for each [node](Ix), so it should be
 //! easy to change node representation and expand the state space over time.
 
-use crate::{ProblemV2, Step};
+use crate::{Problem, Step};
 use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
 use std::collections::hash_map::HashMap;
 
@@ -37,7 +37,7 @@ pub struct Config {
 }
 
 impl LatticeConfig<Ix> for Config {
-    fn new(problem: &ProblemV2) -> Self {
+    fn new(problem: &Problem) -> Self {
         let pattern = Patt::extract(problem);
         let text = Text::extract(problem);
         Config { pattern, text }

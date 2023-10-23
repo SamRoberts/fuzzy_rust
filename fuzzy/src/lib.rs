@@ -65,7 +65,7 @@ pub mod error;
 /// of this API: different Question implementations can do this differently.
 pub trait Question<Error> {
     /// Try to build a [`Problem`].
-    fn ask(&self) -> Result<ProblemV2, Error>;
+    fn ask(&self) -> Result<Problem, Error>;
 }
 
 /// Calculates the optimal solution for a [`Problem`].
@@ -74,7 +74,7 @@ pub trait Question<Error> {
 /// calculated `score` and `trace`. We will probably change this API in the future.
 pub trait Solution<Error> : Sized {
     /// Try to figure out the solution for a [`Problem`].
-    fn solve(problem: &ProblemV2) -> Result<Self, Error>;
+    fn solve(problem: &Problem) -> Result<Self, Error>;
 
     // TODO while we are still converting Patt/Text to Match/char, it's temporarily convenient to
     // make these methods return data structures owned by the caller. Will revert later.
@@ -97,7 +97,7 @@ pub trait Solution<Error> : Sized {
 /// If the [`Solution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
-    fn new(problem: &ProblemV2, score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
+    fn new(problem: &Problem, score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
 }
 
 /// The second version of our Problem API.
@@ -105,7 +105,7 @@ pub trait Output : Display {
 /// This shouldn't co-exist with [`Problem`] for long: just while we replace [`Patt`] with types
 /// that belong to the specific implementations.
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct ProblemV2 {
+pub struct Problem {
     pub pattern: Pattern,
     pub text: Atoms,
 }
@@ -204,7 +204,7 @@ pub mod test_cases {
 
     // A test case may or may not have a well defined trace
     pub struct TestCase<Trace> {
-        pub problem: ProblemV2,
+        pub problem: Problem,
         pub score: usize,
         pub trace: Trace
     }
@@ -452,9 +452,9 @@ pub mod test_cases {
         Match::Class(Class::from(wildcard_class))
     }
 
-    pub fn problem(elems: Vec<Element>, text: &str) -> ProblemV2 {
+    pub fn problem(elems: Vec<Element>, text: &str) -> Problem {
         let atoms = text.chars().collect();
-        ProblemV2 {
+        Problem {
             pattern: Pattern { elems },
             text:    Atoms { atoms },
         }
