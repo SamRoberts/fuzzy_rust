@@ -103,7 +103,7 @@ impl FlatPattern {
     }
 }
 
-/// An individual element in [`FlatProblem`].
+/// An individual element in [`FlatPattern`].
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Flat {
     /// Matches a specific character.

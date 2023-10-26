@@ -141,7 +141,7 @@ impl LatticeState<Config, Ix> for State {
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
-    /// The index into [`Problem::pattern`](crate::Problem::pattern).
+    /// The index into the [flattened `Problem::pattern`](crate::flat_pattern::FlatPattern).
     ///
     /// We will change these field names in the future!
     pub pix: usize,

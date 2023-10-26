@@ -209,10 +209,10 @@ impl LatticeState<Config, Ix> for State {
 /// Indexes into [`State`].
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
-    /// The index into [`Problem::pattern`](crate::Problem::pattern).
-    pub text: usize,
-    /// The index into [`Problem::text`](crate::Problem::text).
+    /// The index into the [flattened `Problem::pattern`](crate::flat_pattern::FlatPattern).
     pub pattern: usize,
+    /// The index into [`Problem::text`](crate::Problem::text).
+    pub text: usize,
     /// This field tracks how many times we are repeating each pattern element.
     pub reps: usize,
     /// This field represents our "repetition depth since we last changed text index".
