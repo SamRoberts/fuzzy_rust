@@ -36,7 +36,7 @@ impl LatticeSolution for TableSolution {
 /// Our state stores an array of nodes. This array forms a table, with one dimension representing
 /// the text, while the other dimension represents an expanded pattern.
 ///
-/// The pattern needs to be expanded because of the ["repetition depth"](Ix::repetition_depth_this_text)
+/// The pattern needs to be expanded because of the ["repetition depth"](Ix::rep_off)
 /// concept: we need extra nodes for pattern elements inside repetition groups. We don't actually need
 /// to store the expanded pattern, but we do need it's larger offsets and length.
 ///
@@ -49,22 +49,15 @@ impl LatticeSolution for TableSolution {
 pub struct Config {
     text: Vec<Text>,
     pattern: Vec<Patt>,
-    /// This array extends [`pattern`] elements with larger offsets for the expanded pattern.
-    expanded_offsets: Vec<usize>,
-    /// We also need to store the total length of the expanded pattern.
-    expanded_pattern_len: usize,
 }
 
 impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem) -> Self {
-        let pattern = Patt::extract(problem);
+        let pattern = Patt::extract_custom(problem, 1);
         let text = Text::extract(problem);
-        let (expanded_pattern_len, expanded_offsets) = Self::expand(&pattern);
         Config {
             text: text,
             pattern: pattern,
-            expanded_offsets,
-            expanded_pattern_len,
         }
     }
 
@@ -73,24 +66,22 @@ impl LatticeConfig<Ix> for Config {
     }
 
     fn start(&self) -> Ix {
-        Ix { text: 0, pattern: 0, node: 0, repetition_depth: 0, repetition_depth_this_text: 0 }
+        Ix { text: 0, pattern: 0, reps: 1, rep_off: 0 }
     }
 
     fn end(&self) -> Ix {
         Ix {
             text: self.text.len() - 1,
             pattern: self.pattern.len() - 1,
-            node: self.num_nodes() - 1,
-            repetition_depth: 0,
-            repetition_depth_this_text: 0,
+            reps: 1,
+            rep_off: 0,
         }
     }
 
     fn skip_text(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
             text: ix.text + 1,
-            node: ix.node + self.expanded_pattern_len - ix.repetition_depth_this_text,
-            repetition_depth_this_text: 0,
+            rep_off: 0,
             ..ix
         };
         Next { cost: 1, next, step: Some(Step::SkipText(())) }
@@ -98,8 +89,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn skip_patt(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth + 1,
+            pattern: ix.pattern + ix.reps,
             ..ix
         };
         Next { cost: 1, next, step: Some(Step::SkipPattern(())) }
@@ -108,9 +98,8 @@ impl LatticeConfig<Ix> for Config {
     fn hit(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
             text: ix.text + 1,
-            pattern: ix.pattern + 1,
-            node: ix.node + self.expanded_pattern_len + ix.repetition_depth + 1 - ix.repetition_depth_this_text,
-            repetition_depth_this_text: 0,
+            pattern: ix.pattern + ix.reps,
+            rep_off: 0,
             ..ix
         };
         Next { cost: 0, next, step: Some(Step::Hit((),())) }
@@ -118,8 +107,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn start_group(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth + 1,
+            pattern: ix.pattern + ix.reps,
             ..ix
         };
         Next { cost: 0, next, step: Some(Step::StartCapture) }
@@ -127,8 +115,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn stop_group(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth + 1,
+            pattern: ix.pattern + ix.reps,
             ..ix
         };
         Next { cost: 0, next, step: Some(Step::StopCapture) }
@@ -136,8 +123,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn start_left(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth + 1,
+            pattern: ix.pattern + ix.reps,
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -145,8 +131,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + off + 1,
-            node: ix.node + self.expanded_offsets[ix.pattern] + ix.repetition_depth + 1,
+            pattern: ix.pattern + off + ix.reps,
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -155,7 +140,6 @@ impl LatticeConfig<Ix> for Config {
     fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix {
             pattern: ix.pattern + off,
-            node: ix.node + self.expanded_offsets[ix.pattern],
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -163,10 +147,9 @@ impl LatticeConfig<Ix> for Config {
 
     fn start_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth + 2,
-            repetition_depth: ix.repetition_depth + 1,
-            repetition_depth_this_text: ix.repetition_depth_this_text + 1,
+            pattern: ix.pattern + ix.reps,
+            reps: ix.reps + 1,
+            rep_off: ix.rep_off + 1,
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -174,10 +157,9 @@ impl LatticeConfig<Ix> for Config {
 
     fn end_repetition(&self, ix: Ix) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + 1,
-            node: ix.node + ix.repetition_depth,
-            repetition_depth: ix.repetition_depth - 1,
-            repetition_depth_this_text: ix.repetition_depth_this_text - 1,
+            pattern: ix.pattern + ix.reps,
+            reps: ix.reps - 1,
+            rep_off: ix.rep_off - 1,
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -185,8 +167,7 @@ impl LatticeConfig<Ix> for Config {
 
     fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix {
-            pattern: ix.pattern + off + 1,
-            node: ix.node + self.expanded_offsets[ix.pattern] + ix.repetition_depth + 2,
+            pattern: ix.pattern + off + ix.reps + 1,
             ..ix
         };
         Next { cost: 0, next, step: None }
@@ -195,92 +176,41 @@ impl LatticeConfig<Ix> for Config {
     fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
         let next = Ix {
             pattern: ix.pattern - off,
-            node: ix.node - self.expanded_offsets[ix.pattern],
-            repetition_depth: ix.repetition_depth - 1,
             ..ix
         };
         Next { cost: 0, next, step: None }
     }
 }
 
-impl Config {
-    fn num_nodes(&self) -> usize {
-        self.text.len() * self.expanded_pattern_len
-    }
-
-    fn expand(original: &Vec<Patt>) -> (usize, Vec<usize>) {
-        // This is the most horrible code. It would be a lot easier with a hierarachical pattern
-        // representation.
-        let mut len_expand = 0;
-        let mut repetition_starts = vec![];
-        let mut alternative_lefts = vec![];
-        let mut alternative_rights = vec![];
-        let mut offsets_expand = vec![];
-
-        for (patt_ix, patt) in original.iter().enumerate() {
-            while let Some((right_patt, right_expand, end_patt)) = alternative_rights.last() {
-                if patt_ix == *end_patt {
-                    let offset = len_expand - *right_expand;
-                    offsets_expand[*right_patt] = offset;
-                    alternative_rights.pop();
-                } else {
-                    break;
-                }
-            }
-
-            match patt {
-                Patt::Lit(_) | Patt::Class(_) | Patt::GroupStart | Patt::GroupEnd | Patt::End => {
-                    len_expand += repetition_starts.len() + 1;
-                    offsets_expand.push(0);
-                },
-                Patt::AlternativeLeft(_) => {
-                    alternative_lefts.push((patt_ix, len_expand));
-                    len_expand += repetition_starts.len() + 1;
-                    offsets_expand.push(0); // will modify once we know where right branch is
-                },
-                Patt::AlternativeRight(off) => {
-                    alternative_rights.push((patt_ix, len_expand, patt_ix + off));
-                    let (left_patt, left_expand) = alternative_lefts.pop().unwrap();
-                    let offset = len_expand - left_expand;
-                    len_expand += repetition_starts.len() + 1;
-                    offsets_expand[left_patt] = offset;
-                    offsets_expand.push(0); // will modify once we know where end is
-                },
-                Patt::RepetitionStart(_) => {
-                    repetition_starts.push((patt_ix, len_expand));
-                    len_expand += repetition_starts.len();
-                    offsets_expand.push(0); // will modify once we know where end is
-                },
-                Patt::RepetitionEnd(_) => {
-                    let (start_patt, start_expand) = repetition_starts.pop().unwrap();
-                    let offset = len_expand - start_expand;
-                    len_expand += repetition_starts.len() + 2;
-                    offsets_expand[start_patt] = offset;
-                    offsets_expand.push(offset);
-                },
-            }
-        }
-
-        (len_expand, offsets_expand)
-    }
-}
-
 pub struct State {
     nodes: Vec<Node<Ix>>,
+    pattern_len: usize,
+}
+
+impl State {
+    fn node(&self, ix: Ix) -> usize {
+        ix.text * self.pattern_len + ix.pattern + ix.rep_off
+    }
 }
 
 impl LatticeState<Config, Ix> for State {
     fn new(conf: &Config) -> Self {
-        State { nodes: vec![Node::Ready; conf.num_nodes()] }
+        let pattern_len = conf.pattern.len();
+        let num_nodes = conf.text.len() * pattern_len;
+        State {
+            nodes: vec![Node::Ready; num_nodes],
+            pattern_len,
+        }
     }
 
-
     fn get(&self, ix: Ix) -> Node<Ix> {
-        self.nodes[ix.node]
+        let node_ix = self.node(ix);
+        self.nodes[node_ix]
     }
 
     fn set(&mut self, ix: Ix, node: Node<Ix>) {
-        self.nodes[ix.node] = node;
+        let node_ix = self.node(ix);
+        self.nodes[node_ix] = node;
     }
 }
 
@@ -291,12 +221,8 @@ pub struct Ix {
     pub text: usize,
     /// The index into [`Problem::text`](crate::Problem::text).
     pub pattern: usize,
-    /// The index into [`State`] nodes vector.
-    pub node: usize,
-    /// This field tracks how many repetition groups the current pattern element is inside.
-    ///
-    /// When we move from one pattern element to the next we increment [`Ix::pattern`] by this amount + 1.
-    pub repetition_depth: usize,
+    /// This field tracks how many times we are repeating each pattern element.
+    pub reps: usize,
     /// This field represents our "repetition depth since we last changed text index".
     ///
     /// To avoid infinite loops, we have to avoid repeating a repetition group if that would take us
@@ -305,12 +231,12 @@ pub struct Ix {
     /// This ix the "repetition depth". Because the "repetition depth" affects future jumps, it also
     /// affects the future score, and so we have a separate score and a separate index for each
     /// repetition depth value.
-    pub repetition_depth_this_text: usize,
+    pub rep_off: usize,
 }
 
 impl LatticeIx<Config> for Ix {
     fn can_restart(&self) -> bool {
-        self.repetition_depth_this_text == 0
+        self.rep_off == 0
     }
 }
 
