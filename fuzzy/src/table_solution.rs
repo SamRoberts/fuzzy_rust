@@ -5,7 +5,8 @@
 //! do these in the future.
 
 use crate::{Match, Problem, Step};
-use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt};
+use crate::flat_pattern::{Flat, FlatPattern};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
@@ -34,26 +35,15 @@ impl LatticeSolution for TableSolution {
 /// Stores the text and pattern from the original [`Problem`](crate::Problem).
 ///
 /// Our state stores an array of nodes. This array forms a table, with one dimension representing
-/// the text, while the other dimension represents an expanded pattern.
-///
-/// The pattern needs to be expanded because of the ["repetition depth"](Ix::rep_off)
-/// concept: we need extra nodes for pattern elements inside repetition groups. We don't actually need
-/// to store the expanded pattern, but we do need it's larger offsets and length.
-///
-/// ```ignore
-/// Original pattern: abc<d e f < g  h  i  >  j k l > mno, offsets: 12,  4,  4, and 12, length: 19
-/// Expanded pattern: abc<ddeeff<<ggghhhiii>>>jjkkll>>mno, offsets: 27, 11, 11, and 27, length: 35
-///
-/// (In this example, < and > represent the start and end of repetitions.)
-/// ```
+/// the text, while the other dimension represents an expanded pattern, per [`FlatPattern::custom`].
 pub struct Config {
     text: Vec<char>,
-    pattern: Vec<Patt>,
+    pattern: FlatPattern,
 }
 
 impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem) -> Self {
-        let pattern = Patt::extract_custom(problem, 1);
+        let pattern = FlatPattern::custom(&problem.pattern, 1);
         let text = problem.text.atoms.clone();
         Config {
             text: text,
@@ -61,7 +51,7 @@ impl LatticeConfig<Ix> for Config {
         }
     }
 
-    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&char>) {
+    fn get(&self, ix: Ix) -> (Option<&Flat>, Option<&char>) {
         (self.pattern.get(ix.pattern), self.text.get(ix.text))
     }
 

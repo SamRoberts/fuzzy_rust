@@ -1,6 +1,7 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Class, Element, Match, Pattern, Problem, Solution, Step};
+use crate::{Match, Problem, Solution, Step};
+use crate::flat_pattern::Flat;
 use crate::error::Error;
 use std::fmt::Debug;
 
@@ -58,8 +59,8 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 let (patt, text) = conf.get(from);
                 let final_step = step.map(
                     |_| match patt {
-                        Some(Patt::Lit(c))   => Match::Lit(*c),
-                        Some(Patt::Class(c)) => Match::Class(c.clone()),
+                        Some(Flat::Lit(c))   => Match::Lit(*c),
+                        Some(Flat::Class(c)) => Match::Class(c.clone()),
                         unexpected           => panic!("Unexpected trace pattern {:?}", unexpected),
                     },
                     |_| match text {
@@ -102,11 +103,11 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 let (patt, text) = conf.get(ix);
 
                 match (patt, text) {
-                    (Some(Patt::Class(class)), Some(c)) if class.matches(*c) => {
+                    (Some(Flat::Class(class)), Some(c)) if class.matches(*c) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    (Some(Patt::Lit(a)), Some(b)) if *a == *b => {
+                    (Some(Flat::Lit(a)), Some(b)) if *a == *b => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
@@ -124,37 +125,37 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 }
 
                 match patt {
-                    Some(Patt::Lit(_) | Patt::Class(_)) => {
+                    Some(Flat::Lit(_) | Flat::Class(_)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_patt(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::GroupStart) => {
+                    Some(Flat::GroupStart) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::GroupEnd) => {
+                    Some(Flat::GroupEnd) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.stop_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::AlternativeLeft(off)) => {
+                    Some(Flat::AlternativeLeft(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_left(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_right(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::AlternativeRight(off)) => {
+                    Some(Flat::AlternativeRight(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_right(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::RepetitionEnd(off)) if ix.can_restart() => {
+                    Some(Flat::RepetitionEnd(off)) if ix.can_restart() => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_repetition(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::RepetitionEnd(_)) => { // cannot restart
+                    Some(Flat::RepetitionEnd(_)) => { // cannot restart
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.end_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Some(Patt::RepetitionStart(off)) => {
+                    Some(Flat::RepetitionStart(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_repetition(ix, *off))?;
@@ -201,7 +202,7 @@ impl <Sln> Solution<Error> for Sln where
 
 pub trait LatticeConfig<Ix> {
     fn new(problem: &Problem) -> Self;
-    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&char>);
+    fn get(&self, ix: Ix) -> (Option<&Flat>, Option<&char>);
 
     fn start(&self) -> Ix;
     fn end(&self) -> Ix;
@@ -228,109 +229,6 @@ pub trait LatticeState<Conf, Ix> {
 
 pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized {
     fn can_restart(&self) -> bool;
-}
-
-/// An individual element in [`Problem::pattern`].
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Patt {
-    /// Matches a specific character.
-    ///
-    /// Although this API implies this crate operates on unicode characters, the current code
-    /// sometimes naively converts bytes to characters, assuming ASCII.
-    Lit(char),
-    /// Matches a class of characters, e.g. `.` or `[a-z]`.
-    Class(Class),
-    GroupStart,
-    GroupEnd,
-    /// Starts the first branch of an alternation.
-    ///
-    /// This stores the offset between this item and the corresponding
-    /// [`AlternativeRight`](Patt::AlternativeRight) branch.
-    AlternativeLeft(usize),
-    /// Starts the second branch of an alternation.
-    ///
-    /// This stores the offset between this item and the element immediately after the alternation.
-    AlternativeRight(usize),
-    /// Starts a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding future
-    /// [`RepetitionEnd`](Patt::RepetitionEnd) item.
-    RepetitionStart(usize),
-    /// Ends a repetition.
-    ///
-    /// This stores the offset between this item and the corresponding past
-    /// [`RepetitionStart`](Patt::RepetitionStart) item.
-    RepetitionEnd(usize),
-}
-
-impl Patt {
-    pub fn extract(problem: &Problem) -> Vec<Self> {
-        Self::extract_custom(problem, 0)
-    }
-
-    pub fn extract_custom(problem: &Problem, rep_incr: usize) -> Vec<Patt> {
-        let mut result = vec![];
-        Self::pattern_patts(&mut result, &problem.pattern, 1, rep_incr);
-        result
-    }
-
-    fn pattern_patts(result: &mut Vec<Patt>, pattern: &Pattern, reps: usize, rep_incr: usize) {
-        for elem in pattern.elems.iter() {
-            Self::elem_patts(result, elem, reps, rep_incr)
-        }
-    }
-
-    fn elem_patts(result: &mut Vec<Patt>, elem: &Element, reps: usize, rep_incr: usize) {
-        match elem {
-            Element::Match(Match::Lit(c)) =>
-                Self::single_patt(result, Patt::Lit(*c), reps),
-            Element::Match(Match::Class(class)) =>
-                Self::single_patt(result, Patt::Class(class.clone()), reps),
-            Element::Capture(inner) => {
-                Self::single_patt(result, Patt::GroupStart, reps);
-                Self::pattern_patts(result, inner, reps, rep_incr);
-                Self::single_patt(result, Patt::GroupEnd, reps);
-            }
-            Element::Repetition(inner) => {
-                let next_reps = reps + rep_incr;
-                let start_ix = result.len();
-                Self::single_patt(result, Patt::RepetitionStart(0), reps);
-                Self::pattern_patts(result, inner, next_reps, rep_incr);
-                let end_ix = result.len();
-                Self::single_patt(result, Patt::RepetitionEnd(0), next_reps);
-
-                let off = end_ix - start_ix;
-                Self::update_patt(result, Patt::RepetitionStart(off), start_ix, reps);
-                Self::update_patt(result, Patt::RepetitionEnd(off), end_ix, next_reps);
-            }
-            Element::Alternative(p1, p2) => {
-                let left_ix = result.len();
-                Self::single_patt(result, Patt::AlternativeLeft(0), reps);
-                Self::pattern_patts(result, p1, reps, rep_incr);
-                let right_ix = result.len();
-                Self::single_patt(result, Patt::AlternativeRight(0), reps);
-                Self::pattern_patts(result, p2, reps, rep_incr);
-                let next_ix = result.len();
-
-                let left_off = right_ix - left_ix;
-                let right_off = next_ix - right_ix;
-                Self::update_patt(result, Patt::AlternativeLeft(left_off), left_ix, reps);
-                Self::update_patt(result, Patt::AlternativeRight(right_off), right_ix, reps);
-            }
-        }
-    }
-
-    fn single_patt(result: &mut Vec<Patt>, elem: Patt, reps: usize) {
-        for _ in 0..reps {
-            result.push(elem.clone());
-        }
-    }
-
-    fn update_patt(result: &mut Vec<Patt>, elem: Patt, ix: usize, reps: usize) {
-        for i in 0..reps {
-            result[ix + i] = elem.clone();
-        }
-    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
