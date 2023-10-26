@@ -272,57 +272,71 @@ pub enum Patt {
 
 impl Patt {
     pub fn extract(problem: &Problem) -> Vec<Self> {
-        Self::pattern_patts(&problem.pattern)
-            .chain(vec![Patt::End])
-            .collect()
+        Self::extract_custom(problem, 0)
     }
 
-    fn pattern_patts(pattern: &Pattern) -> impl Iterator<Item = Patt> + '_ {
-        pattern.elems.iter().flat_map(|elem| Self::elem_patts(elem))
+    pub fn extract_custom(problem: &Problem, rep_incr: usize) -> Vec<Patt> {
+        let mut result = vec![];
+        Self::pattern_patts(&mut result, &problem.pattern, 1, rep_incr);
+        Self::single_patt(&mut result, Patt::End, 1);
+        result
     }
 
-    fn elem_patts(elem: &Element) -> Vec<Patt> {
+    fn pattern_patts(result: &mut Vec<Patt>, pattern: &Pattern, reps: usize, rep_incr: usize) {
+        for elem in pattern.elems.iter() {
+            Self::elem_patts(result, elem, reps, rep_incr)
+        }
+    }
+
+    fn elem_patts(result: &mut Vec<Patt>, elem: &Element, reps: usize, rep_incr: usize) {
         match elem {
-            Element::Match(Match::Lit(c)) => vec![Patt::Lit(*c)],
-            Element::Match(Match::Class(class)) => vec![Patt::Class(class.clone())],
-            Element::Capture(p) => {
-                let mut result = vec![];
-                result.push(Patt::GroupStart);
-                result.extend(Self::pattern_patts(p));
-                result.push(Patt::GroupEnd);
-                result
+            Element::Match(Match::Lit(c)) =>
+                Self::single_patt(result, Patt::Lit(*c), reps),
+            Element::Match(Match::Class(class)) =>
+                Self::single_patt(result, Patt::Class(class.clone()), reps),
+            Element::Capture(inner) => {
+                Self::single_patt(result, Patt::GroupStart, reps);
+                Self::pattern_patts(result, inner, reps, rep_incr);
+                Self::single_patt(result, Patt::GroupEnd, reps);
             }
-            Element::Repetition(p) => {
-                let mut result = vec![];
+            Element::Repetition(inner) => {
+                let next_reps = reps + rep_incr;
                 let start_ix = result.len();
-                result.push(Patt::RepetitionStart(0));
-                result.extend(Self::pattern_patts(p));
+                Self::single_patt(result, Patt::RepetitionStart(0), reps);
+                Self::pattern_patts(result, inner, next_reps, rep_incr);
                 let end_ix = result.len();
-                result.push(Patt::RepetitionEnd(0));
+                Self::single_patt(result, Patt::RepetitionEnd(0), next_reps);
 
                 let off = end_ix - start_ix;
-                result[start_ix] = Patt::RepetitionStart(off);
-                result[end_ix] = Patt::RepetitionEnd(off);
-
-                result
+                Self::update_patt(result, Patt::RepetitionStart(off), start_ix, reps);
+                Self::update_patt(result, Patt::RepetitionEnd(off), end_ix, next_reps);
             }
             Element::Alternative(p1, p2) => {
-                let mut result = vec![];
                 let left_ix = result.len();
-                result.push(Patt::AlternativeLeft(0));
-                result.extend(Self::pattern_patts(p1));
+                Self::single_patt(result, Patt::AlternativeLeft(0), reps);
+                Self::pattern_patts(result, p1, reps, rep_incr);
                 let right_ix = result.len();
-                result.push(Patt::AlternativeRight(0));
-                result.extend(Self::pattern_patts(p2));
+                Self::single_patt(result, Patt::AlternativeRight(0), reps);
+                Self::pattern_patts(result, p2, reps, rep_incr);
                 let next_ix = result.len();
 
                 let left_off = right_ix - left_ix;
                 let right_off = next_ix - right_ix;
-                result[left_ix] = Patt::AlternativeLeft(left_off);
-                result[right_ix] = Patt::AlternativeRight(right_off);
-
-                result
+                Self::update_patt(result, Patt::AlternativeLeft(left_off), left_ix, reps);
+                Self::update_patt(result, Patt::AlternativeRight(right_off), right_ix, reps);
             }
+        }
+    }
+
+    fn single_patt(result: &mut Vec<Patt>, elem: Patt, reps: usize) {
+        for _ in 0..reps {
+            result.push(elem.clone());
+        }
+    }
+
+    fn update_patt(result: &mut Vec<Patt>, elem: Patt, ix: usize, reps: usize) {
+        for i in 0..reps {
+            result[ix + i] = elem.clone();
         }
     }
 }
