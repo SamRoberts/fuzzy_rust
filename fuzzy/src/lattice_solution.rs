@@ -63,7 +63,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                         unexpected           => panic!("Unexpected trace pattern {:?}", unexpected),
                     },
                     |_| match text {
-                        Some(Text::Lit(c)) => *c,
+                        Some(c) => *c,
                         unexpected         => panic!("Unexpected trace text {:?}", unexpected),
                     }
                 );
@@ -102,11 +102,11 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 let (patt, text) = conf.get(ix);
 
                 match (patt, text) {
-                    (Some(Patt::Class(class)), Some(Text::Lit(c))) if class.matches(*c) => {
+                    (Some(Patt::Class(class)), Some(c)) if class.matches(*c) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    (Some(Patt::Lit(a)), Some(Text::Lit(b))) if *a == *b => {
+                    (Some(Patt::Lit(a)), Some(b)) if *a == *b => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
@@ -115,7 +115,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 }
 
                 match text {
-                    Some(Text::Lit(_)) => {
+                    Some(_) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_text(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
@@ -201,7 +201,7 @@ impl <Sln> Solution<Error> for Sln where
 
 pub trait LatticeConfig<Ix> {
     fn new(problem: &Problem) -> Self;
-    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>);
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&char>);
 
     fn start(&self) -> Ix;
     fn end(&self) -> Ix;
@@ -330,24 +330,6 @@ impl Patt {
         for i in 0..reps {
             result[ix + i] = elem.clone();
         }
-    }
-}
-
-/// An individual element in [`Problem::text`].
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Text {
-    /// A character.
-    ///
-    /// Although this API implies the crate operates on unicode characters, the current code
-    /// sometimes naively converts bytes to characters, assuming ASCII.
-    Lit(char),
-}
-
-impl Text {
-    pub fn extract(problem: &Problem) -> Vec<Self> {
-        problem.text.atoms.iter()
-            .map(|c| Text::Lit(*c))
-            .collect()
     }
 }
 

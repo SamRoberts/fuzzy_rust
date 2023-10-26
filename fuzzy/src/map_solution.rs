@@ -4,7 +4,7 @@
 //! easy to change node representation and expand the state space over time.
 
 use crate::{Match, Problem, Step};
-use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt};
 use std::collections::hash_map::HashMap;
 
 #[derive(Eq, PartialEq, Debug)]
@@ -33,17 +33,17 @@ impl LatticeSolution for MapSolution {
 
 pub struct Config {
     pattern: Vec<Patt>,
-    text: Vec<Text>,
+    text: Vec<char>,
 }
 
 impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem) -> Self {
         let pattern = Patt::extract(problem);
-        let text = Text::extract(problem);
+        let text = problem.text.atoms.clone();
         Config { pattern, text }
     }
 
-    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>) {
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&char>) {
         (self.pattern.get(ix.pix), self.text.get(ix.tix))
     }
 
