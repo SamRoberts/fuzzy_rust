@@ -7,7 +7,6 @@
 
 use regex_syntax;
 use regex_syntax::hir;
-use regex_syntax::hir::{Capture, Hir, HirKind, Literal};
 use crate::{Atoms, Class, Element, Match, Pattern, Problem, Question, Repetition};
 use crate::error::Error;
 
@@ -34,20 +33,20 @@ impl RegexQuestion {
         try_elems.map(|elems| Pattern { elems })
     }
 
-    fn parse_impl(hir: &Hir) -> Result<Vec<Element>, Error>
+    fn parse_impl(hir: &hir::Hir) -> Result<Vec<Element>, Error>
     {
         match hir.kind() {
-            HirKind::Literal(Literal(ref bytes)) => {
+            hir::HirKind::Literal(hir::Literal(ref bytes)) => {
                 // TODO modify Patt::Lit to use bytes rather then chars. For now, assuming ascii
                 Ok(bytes.iter().map(|b| Element::Match(Match::Lit(*b as char))).collect())
             }
-            HirKind::Class(class) => {
+            hir::HirKind::Class(class) => {
                 Ok(vec![Element::Match(Match::Class(Class::from(class.clone())))])
             }
-            HirKind::Capture(Capture { sub, .. }) => {
+            hir::HirKind::Capture(hir::Capture { sub, .. }) => {
                Self::pattern(Self::parse_impl(sub)).map(|p| vec![Element::Capture(p)])
             }
-            HirKind::Alternation(children) => {
+            hir::HirKind::Alternation(children) => {
                 match &children[..] {
                     [] => Ok(vec![]),
                     [sub] => Self::parse_impl(sub),
@@ -68,12 +67,12 @@ impl RegexQuestion {
                     }
                 }
             }
-            HirKind::Repetition(hir::Repetition { min: 0, max: None, sub, .. }) => {
+            hir::HirKind::Repetition(hir::Repetition { min: 0, max: None, sub, .. }) => {
                 Self::pattern(Self::parse_impl(sub)).map(|p|
                     vec![Element::Repetition(Repetition { minimum: 0, inner: p})]
                 )
             }
-            HirKind::Concat(subs) => {
+            hir::HirKind::Concat(subs) => {
                 let try_nested: Result<Vec<Vec<Element>>, Error> =
                     Result::from_iter(subs.iter().map(|sub| Self::parse_impl(sub)));
                 try_nested.map(|nested| nested.into_iter().flatten().collect())
