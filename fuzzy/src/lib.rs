@@ -42,8 +42,6 @@
 //! In addition to these traits:
 //!
 //! - The [`Problem`] contains the parsed [`pattern`](Problem::pattern) and [`text`](Problem::text).
-//!    - A [`Patt`] is a single item from the parsed pattern.
-//!    - A [`Text`] is a single character from the text.
 //! - From the [`Solution`]:
 //!    - The [`score`](Solution::score) is a simple `usize`.
 //!    - A [`Step`] is a single item from the optimal [`trace`](Solution::trace).
@@ -98,10 +96,8 @@ pub trait Output : Display {
     fn new(problem: &Problem, score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
 }
 
-/// The second version of our Problem API.
-///
-/// This shouldn't co-exist with [`Problem`] for long: just while we replace [`Patt`] with types
-/// that belong to the specific implementations.
+/// A problem to be solved: contains the pattern we are matching text against, as well as the text
+/// which may or may not match it.
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Problem {
     pub pattern: Pattern,
@@ -169,8 +165,6 @@ impl Class {
 /// An individual element in [`Solution::trace`].
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum Step<P, T> {
-    // NOTE: making P and T generic seems overkill right now, but will be useful when I completely
-    // separate Patt/Text in solutions from Patt/Text in top-level api
     Hit(P, T),
     SkipPattern(P),
     SkipText(T),
