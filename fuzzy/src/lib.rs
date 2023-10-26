@@ -113,7 +113,7 @@ pub struct Pattern {
 pub enum Element {
     Match(Match),
     Capture(Pattern),
-    Repetition(Pattern),
+    Repetition(Repetition),
     Alternative(Pattern, Pattern),
 }
 
@@ -121,6 +121,12 @@ pub enum Element {
 pub enum Match {
     Lit(char),
     Class(Class),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct Repetition {
+    minimum: usize,
+    inner: Pattern,
 }
 
 // using the term atom as we might eventually match words/lines/etc.
@@ -466,7 +472,9 @@ pub mod test_cases {
     }
 
     pub fn rep(elems: Vec<Element>) -> Element {
-        Element::Repetition(Pattern { elems })
+        let minimum = 0;
+        let inner = Pattern { elems };
+        Element::Repetition(Repetition { minimum, inner })
     }
 
     pub fn alt(left: Vec<Element>, right: Vec<Element>) -> Element {

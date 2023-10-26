@@ -6,8 +6,9 @@
 //! assuming all characters are ASCII. We will change this in the future.
 
 use regex_syntax;
-use regex_syntax::hir::{Capture, Hir, HirKind, Literal, Repetition};
-use crate::{Atoms, Class, Element, Match, Pattern, Problem, Question};
+use regex_syntax::hir;
+use regex_syntax::hir::{Capture, Hir, HirKind, Literal};
+use crate::{Atoms, Class, Element, Match, Pattern, Problem, Question, Repetition};
 use crate::error::Error;
 
 pub struct RegexQuestion {
@@ -67,8 +68,10 @@ impl RegexQuestion {
                     }
                 }
             }
-            HirKind::Repetition(Repetition { min: 0, max: None, sub, .. }) => {
-                Self::pattern(Self::parse_impl(sub)).map(|p| vec![Element::Repetition(p)])
+            HirKind::Repetition(hir::Repetition { min: 0, max: None, sub, .. }) => {
+                Self::pattern(Self::parse_impl(sub)).map(|p|
+                    vec![Element::Repetition(Repetition { minimum: 0, inner: p})]
+                )
             }
             HirKind::Concat(subs) => {
                 let try_nested: Result<Vec<Vec<Element>>, Error> =

@@ -61,11 +61,11 @@ impl FlatPattern {
                 Self::pattern_patts(result, inner, reps, rep_incr);
                 Self::single_patt(result, Flat::GroupEnd, reps);
             }
-            Element::Repetition(inner) => {
+            Element::Repetition(repetition) => {
                 let next_reps = reps + rep_incr;
                 let start_ix = result.len();
                 Self::single_patt(result, Flat::RepetitionStart(0), reps);
-                Self::pattern_patts(result, inner, next_reps, rep_incr);
+                Self::pattern_patts(result, &repetition.inner, next_reps, rep_incr);
                 let end_ix = result.len();
                 Self::single_patt(result, Flat::RepetitionEnd(0), next_reps);
 
