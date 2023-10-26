@@ -76,16 +76,13 @@ pub trait Solution<Error> : Sized {
     /// Try to figure out the solution for a [`Problem`].
     fn solve(problem: &Problem) -> Result<Self, Error>;
 
-    // TODO while we are still converting Patt/Text to Match/char, it's temporarily convenient to
-    // make these methods return data structures owned by the caller. Will revert later.
-
     /// Return the final score for the solution.
     ///
     /// This score represents the cost of mismatches: `0` is best, higher worse.
-    fn score(&self) -> usize;
+    fn score(&self) -> &usize;
 
     /// Return the [`Step`]s followed by the optimal match between pattern and text.
-    fn trace(&self) -> Vec<Step<Match, char>>;
+    fn trace(&self) -> &Vec<Step<Match, char>>;
 }
 
 /// Displays the final solution.
@@ -181,10 +178,6 @@ pub enum Step<P, T> {
 }
 
 impl <P, T> Step<P, T> {
-    fn with<Q: Clone, U: Clone>(&self, q: &Q, u: &U) -> Step<Q, U> {
-        self.map(|_| q.clone(), |_| u.clone())
-    }
-
     fn map<Q, U, FQ: Fn(&P) -> Q, FU: Fn(&T) -> U>(&self, fq: FQ, fu: FU) -> Step<Q, U> {
         match self {
             Self::Hit(p, t) => Step::Hit(fq(p), fu(t)),

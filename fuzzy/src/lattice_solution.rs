@@ -29,10 +29,10 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
     /// [`Conf`](LatticeSolution::Conf).
     type Ix: LatticeIx<Self::Conf>;
 
-    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self;
+    fn new(score: usize, trace: Vec<Step<Match, char>>) -> Self;
 
     fn score_lattice(&self) -> &usize;
-    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>>;
+    fn trace_lattice(&self) -> &Vec<Step<Match, char>>;
 
     /// [`Solution::solve`] implementation.
     fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
@@ -56,7 +56,18 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
             if from == end_ix { break; }
             for step in done.step.iter() {
                 let (patt, text) = conf.get(from);
-                trace.push(step.with(patt, text));
+                let final_step = step.map(
+                    |_| match patt {
+                        Some(Patt::Lit(c))   => Match::Lit(*c),
+                        Some(Patt::Class(c)) => Match::Class(c.clone()),
+                        unexpected           => panic!("Unexpected trace pattern {:?}", unexpected),
+                    },
+                    |_| match text {
+                        Some(Text::Lit(c)) => *c,
+                        unexpected         => panic!("Unexpected trace text {:?}", unexpected),
+                    }
+                );
+                trace.push(final_step);
             }
             from = done.next;
         }
@@ -91,11 +102,11 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 let (patt, text) = conf.get(ix);
 
                 match (patt, text) {
-                    (Patt::Class(class), Text::Lit(c)) if class.matches(*c) => {
+                    (Some(Patt::Class(class)), Some(Text::Lit(c))) if class.matches(*c) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    (Patt::Lit(a), Text::Lit(b)) if *a == *b => {
+                    (Some(Patt::Lit(a)), Some(Text::Lit(b))) if *a == *b => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.hit(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
@@ -104,52 +115,52 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
                 }
 
                 match text {
-                    Text::Lit(_) => {
+                    Some(Text::Lit(_)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_text(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Text::End =>
+                    None =>
                         (),
                 }
 
                 match patt {
-                    Patt::Lit(_) | Patt::Class(_) => {
+                    Some(Patt::Lit(_) | Patt::Class(_)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.skip_patt(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::GroupStart => {
+                    Some(Patt::GroupStart) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::GroupEnd => {
+                    Some(Patt::GroupEnd) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.stop_group(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::AlternativeLeft(off) => {
+                    Some(Patt::AlternativeLeft(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_left(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_right(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::AlternativeRight(off) => {
+                    Some(Patt::AlternativeRight(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_right(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::RepetitionEnd(off) if ix.can_restart() => {
+                    Some(Patt::RepetitionEnd(off)) if ix.can_restart() => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.restart_repetition(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::RepetitionEnd(_) => { // cannot restart
+                    Some(Patt::RepetitionEnd(_)) => { // cannot restart
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.end_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     },
-                    Patt::RepetitionStart(off) => {
+                    Some(Patt::RepetitionStart(off)) => {
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.start_repetition(ix))?;
                         maybe_score = Self::update(maybe_score, outcome);
                         let outcome = Self::solve_ix(conf, state, end_ix, conf.pass_repetition(ix, *off))?;
                         maybe_score = Self::update(maybe_score, outcome);
                     }
-                    Patt::End =>
+                    None =>
                         (),
                 }
 
@@ -175,25 +186,12 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 impl <Sln> Solution<Error> for Sln where
     Sln: LatticeSolution,
 {
-    fn score(&self) -> usize {
-        *LatticeSolution::score_lattice(self)
+    fn score(&self) -> &usize {
+        LatticeSolution::score_lattice(self)
     }
 
-    fn trace(&self) -> Vec<Step<Match, char>> {
-        // TODO temporarily keeping Patt/Text for implementations
-        LatticeSolution::trace_lattice(self).into_iter()
-            .map(|step| step.map(
-                |p| match p {
-                    Patt::Lit(c)   => Match::Lit(*c),
-                    Patt::Class(c) => Match::Class(c.clone()),
-                    unexpected     => panic!("Unexpected trace pattern {:?}", unexpected),
-                },
-                |t| match  t {
-                    Text::Lit(c) => *c,
-                    unexpected   => panic!("Unexpected trace text {:?}", unexpected),
-                }
-            ))
-            .collect()
+    fn trace(&self) -> &Vec<Step<Match, char>> {
+        LatticeSolution::trace_lattice(self)
     }
 
     fn solve(problem: &Problem) -> Result<Self, Error> {
@@ -203,7 +201,7 @@ impl <Sln> Solution<Error> for Sln where
 
 pub trait LatticeConfig<Ix> {
     fn new(problem: &Problem) -> Self;
-    fn get(&self, ix: Ix) -> (&Patt, &Text);
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>);
 
     fn start(&self) -> Ix;
     fn end(&self) -> Ix;
@@ -263,11 +261,6 @@ pub enum Patt {
     /// This stores the offset between this item and the corresponding past
     /// [`RepetitionStart`](Patt::RepetitionStart) item.
     RepetitionEnd(usize),
-    /// Ends the pattern.
-    ///
-    /// Although this is redundant, fuzzy currently requires the pattern vector to end with
-    /// this value. We will probably remove it in the future.
-    End,
 }
 
 impl Patt {
@@ -278,7 +271,6 @@ impl Patt {
     pub fn extract_custom(problem: &Problem, rep_incr: usize) -> Vec<Patt> {
         let mut result = vec![];
         Self::pattern_patts(&mut result, &problem.pattern, 1, rep_incr);
-        Self::single_patt(&mut result, Patt::End, 1);
         result
     }
 
@@ -349,18 +341,12 @@ pub enum Text {
     /// Although this API implies the crate operates on unicode characters, the current code
     /// sometimes naively converts bytes to characters, assuming ASCII.
     Lit(char),
-    /// Ends the text.
-    ///
-    /// Although this is redundant, fuzzy currently requires the text vector to end with
-    /// this value. We will probably remove it in the future.
-    End
 }
 
 impl Text {
     pub fn extract(problem: &Problem) -> Vec<Self> {
         problem.text.atoms.iter()
             .map(|c| Text::Lit(*c))
-            .chain(vec![Text::End])
             .collect()
     }
 }
@@ -479,12 +465,12 @@ pub mod tests {
 
     pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Match, char>>>) {
         let actual = Sln::solve(&test_case.problem).unwrap();
-        assert_eq!(test_case.score, actual.score());
-        assert_eq!(test_case.trace, actual.trace());
+        assert_eq!(test_case.score, *actual.score());
+        assert_eq!(test_case.trace, *actual.trace());
     }
 
     pub fn test_solve_for_test_case_with_ambiguous_trace<Sln: LatticeSolution>(test_case: TestCase<()>) {
         let actual = Sln::solve(&test_case.problem).unwrap();
-        assert_eq!(test_case.score, actual.score());
+        assert_eq!(test_case.score, *actual.score());
     }
 }

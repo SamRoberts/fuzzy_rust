@@ -3,14 +3,14 @@
 //! This implementation uses a [map](State) to store state for each [node](Ix), so it should be
 //! easy to change node representation and expand the state space over time.
 
-use crate::{Problem, Step};
+use crate::{Match, Problem, Step};
 use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
 use std::collections::hash_map::HashMap;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct MapSolution {
     score: usize,
-    trace: Vec<Step<Patt, Text>>,
+    trace: Vec<Step<Match, char>>,
 }
 
 impl LatticeSolution for MapSolution {
@@ -18,7 +18,7 @@ impl LatticeSolution for MapSolution {
     type Ix = Ix;
     type State = State;
 
-    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self {
+    fn new(score: usize, trace: Vec<Step<Match, char>>) -> Self {
         MapSolution { score, trace }
     }
 
@@ -26,7 +26,7 @@ impl LatticeSolution for MapSolution {
         &self.score
     }
 
-    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>> {
+    fn trace_lattice(&self) -> &Vec<Step<Match, char>> {
         &self.trace
     }
 }
@@ -43,8 +43,8 @@ impl LatticeConfig<Ix> for Config {
         Config { pattern, text }
     }
 
-    fn get(&self, ix: Ix) -> (&Patt, &Text) {
-        (&self.pattern[ix.pix], &self.text[ix.tix])
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>) {
+        (self.pattern.get(ix.pix), self.text.get(ix.tix))
     }
 
     fn start(&self) -> Ix {
@@ -52,7 +52,7 @@ impl LatticeConfig<Ix> for Config {
     }
 
     fn end(&self) -> Ix {
-        Ix { pix: self.pattern.len() - 1, tix: self.text.len() - 1, kix: 0 }
+        Ix { pix: self.pattern.len(), tix: self.text.len(), kix: 0 }
     }
 
     fn skip_text(&self, ix: Ix) -> Next<Ix> {

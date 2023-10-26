@@ -4,13 +4,13 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{Problem, Step};
+use crate::{Match, Problem, Step};
 use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
     score: usize,
-    trace: Vec<Step<Patt, Text>>,
+    trace: Vec<Step<Match, char>>,
 }
 
 impl LatticeSolution for TableSolution {
@@ -18,7 +18,7 @@ impl LatticeSolution for TableSolution {
     type Ix = Ix;
     type State = State;
 
-    fn new(score: usize, trace: Vec<Step<Patt, Text>>) -> Self {
+    fn new(score: usize, trace: Vec<Step<Match, char>>) -> Self {
         TableSolution { score, trace }
     }
 
@@ -26,7 +26,7 @@ impl LatticeSolution for TableSolution {
         &self.score
     }
 
-    fn trace_lattice(&self) -> &Vec<Step<Patt, Text>> {
+    fn trace_lattice(&self) -> &Vec<Step<Match, char>> {
         &self.trace
     }
 }
@@ -61,8 +61,8 @@ impl LatticeConfig<Ix> for Config {
         }
     }
 
-    fn get(&self, ix: Ix) -> (&Patt, &Text) {
-        (&self.pattern[ix.pattern], &self.text[ix.text])
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>) {
+        (self.pattern.get(ix.pattern), self.text.get(ix.text))
     }
 
     fn start(&self) -> Ix {
@@ -71,8 +71,8 @@ impl LatticeConfig<Ix> for Config {
 
     fn end(&self) -> Ix {
         Ix {
-            text: self.text.len() - 1,
-            pattern: self.pattern.len() - 1,
+            text: self.text.len(),
+            pattern: self.pattern.len(),
             reps: 1,
             rep_off: 0,
         }
@@ -195,8 +195,10 @@ impl State {
 
 impl LatticeState<Config, Ix> for State {
     fn new(conf: &Config) -> Self {
-        let pattern_len = conf.pattern.len();
-        let num_nodes = conf.text.len() * pattern_len;
+        // we need an extra row/col for indices at the end of pattern and text
+        let pattern_len = conf.pattern.len() + 1;
+        let text_len = conf.text.len() + 1;
+        let num_nodes = text_len * pattern_len;
         State {
             nodes: vec![Node::Ready; num_nodes],
             pattern_len,
