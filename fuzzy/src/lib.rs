@@ -57,6 +57,7 @@ pub mod map_solution;
 pub mod table_solution;
 pub mod debug_output;
 pub mod diff_output;
+pub mod flat_pattern;
 pub mod error;
 
 /// A builder of [`Problem`] values.
