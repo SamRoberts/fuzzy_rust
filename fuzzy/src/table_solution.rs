@@ -5,7 +5,7 @@
 //! do these in the future.
 
 use crate::{Match, Problem, Step};
-use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt, Text};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node, Patt};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
@@ -47,21 +47,21 @@ impl LatticeSolution for TableSolution {
 /// (In this example, < and > represent the start and end of repetitions.)
 /// ```
 pub struct Config {
-    text: Vec<Text>,
+    text: Vec<char>,
     pattern: Vec<Patt>,
 }
 
 impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem) -> Self {
         let pattern = Patt::extract_custom(problem, 1);
-        let text = Text::extract(problem);
+        let text = problem.text.atoms.clone();
         Config {
             text: text,
             pattern: pattern,
         }
     }
 
-    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&Text>) {
+    fn get(&self, ix: Ix) -> (Option<&Patt>, Option<&char>) {
         (self.pattern.get(ix.pattern), self.text.get(ix.text))
     }
 
