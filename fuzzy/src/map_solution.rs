@@ -45,74 +45,74 @@ impl LatticeConfig<Ix> for Config {
     }
 
     fn get(&self, ix: Ix) -> (Option<&Flat>, Option<&char>) {
-        (self.pattern.get(ix.pix), self.text.get(ix.tix))
+        (self.pattern.get(ix.pattern), self.text.get(ix.text))
     }
 
     fn start(&self) -> Ix {
-        Ix { pix: 0, tix: 0, kix: 0 }
+        Ix { pattern: 0, text: 0, rep_off: 0 }
     }
 
     fn end(&self) -> Ix {
-        Ix { pix: self.pattern.len(), tix: self.text.len(), kix: 0 }
+        Ix { pattern: self.pattern.len(), text: self.text.len(), rep_off: 0 }
     }
 
     fn skip_text(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { tix: ix.tix + 1, kix: 0, ..ix };
+        let next = Ix { text: ix.text + 1, rep_off: 0, ..ix };
         Next { cost: 1, next, step: Some(Step::SkipText(())) }
     }
 
     fn skip_patt(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, ..ix };
         Next { cost: 1, next, step: Some(Step::SkipPattern(())) }
     }
 
     fn hit(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, tix: ix.tix + 1, kix: 0, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, text: ix.text + 1, rep_off: 0, ..ix };
         Next { cost: 0, next, step: Some(Step::Hit((), ())) }
     }
 
     fn start_group(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, ..ix };
         Next { cost: 0, next, step: Some(Step::StartCapture) }
     }
 
     fn stop_group(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, ..ix };
         Next { cost: 0, next, step: Some(Step::StopCapture) }
     }
 
     fn start_left(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, ..ix };
         Next { cost: 0, next, step: None }
     }
 
     fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + off + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + off + 1, ..ix };
         Next { cost: 0, next, step: None }
     }
 
     fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + off, ..ix };
+        let next = Ix { pattern: ix.pattern + off, ..ix };
         Next { cost: 0, next, step: None }
     }
 
     fn start_repetition(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, kix: ix.kix + 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, rep_off: ix.rep_off + 1, ..ix };
         Next { cost: 0, next, step: None }
     }
 
     fn end_repetition(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + 1, kix: ix.kix - 1, ..ix };
+        let next = Ix { pattern: ix.pattern + 1, rep_off: ix.rep_off - 1, ..ix };
         Next { cost: 0, next, step: None }
     }
 
     fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix { pix: ix.pix + off + 1, ..ix};
+        let next = Ix { pattern: ix.pattern + off + 1, ..ix};
         Next { cost: 0, next, step: None}
     }
 
     fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix { pix: ix.pix - off, ..ix };
+        let next = Ix { pattern: ix.pattern - off, ..ix };
         Next { cost: 0, next, step: None }
     }
 
@@ -142,11 +142,9 @@ impl LatticeState<Config, Ix> for State {
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Ix {
     /// The index into the [flattened `Problem::pattern`](crate::flat_pattern::FlatPattern).
-    ///
-    /// We will change these field names in the future!
-    pub pix: usize,
+    pub pattern: usize,
     /// The index into [`Problem::text`](crate::Problem::text).
-    pub tix: usize,
+    pub text: usize,
     /// This field represents our "repetition depth since we last changed text index".
     ///
     /// To avoid infinite loops, we have to avoid repeating a repetition group if that would take us
@@ -155,12 +153,12 @@ pub struct Ix {
     /// This ix the "repetition depth". Because the "repetition depth" affects future jumps, it also
     /// affects the future score, and so we have a separate score and a separate index for each
     /// repetition depth value.
-    pub kix: usize,
+    pub rep_off: usize,
 }
 
 impl LatticeIx<Config> for Ix {
     fn can_restart(&self) -> bool {
-        self.kix == 0
+        self.rep_off == 0
     }
 }
 
