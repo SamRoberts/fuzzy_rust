@@ -27,8 +27,9 @@
 //! fn fuzzy_match(pattern_regex: String, text: String) -> Result<(), Error> {
 //!     let question = RegexQuestion { pattern_regex, text };
 //!     let problem = question.ask()?;
-//!     let solution = TableSolution::solve(&problem)?;
-//!     let output = DiffOutput::new(&problem, &solution.score(), &solution.trace());
+//!     let problem_core = problem.desugar();
+//!     let solution = TableSolution::solve(&problem_core)?;
+//!     let output = DiffOutput::new(&solution.score(), &solution.trace());
 //!     println!("{}", output);
 //!     Ok(())
 //! }
@@ -64,7 +65,7 @@ pub mod error;
 /// of this API: different Question implementations can do this differently.
 pub trait Question<Error> {
     /// Try to build a [`Problem`].
-    fn ask(&self) -> Result<Problem, Error>;
+    fn ask(&self) -> Result<Problem<Element>, Error>;
 }
 
 /// Calculates the optimal solution for a [`Problem`].
@@ -73,7 +74,7 @@ pub trait Question<Error> {
 /// calculated `score` and `trace`. We will probably change this API in the future.
 pub trait Solution<Error> : Sized {
     /// Try to figure out the solution for a [`Problem`].
-    fn solve(problem: &Problem) -> Result<Self, Error>;
+    fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error>;
 
     /// Return the final score for the solution.
     ///
@@ -88,33 +89,79 @@ pub trait Solution<Error> : Sized {
 ///
 /// Output implementations are just types that implement
 /// [`Display`](https://doc.rust-lang.org/std/fmt/trait.Display.html) and can be constructed out of
-/// a [`Problem`], [`score`](Solution::score), and [`trace`](Solution::trace).
+/// the [`score`](Solution::score) and [`trace`](Solution::trace).
 ///
 /// If the [`Solution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
-    fn new(problem: &Problem, score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
+    fn new(score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
 }
 
 /// A problem to be solved: contains the pattern we are matching text against, as well as the text
 /// which may or may not match it.
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct Problem {
-    pub pattern: Pattern,
+pub struct Problem<E> {
+    pub pattern: Pattern<E>,
     pub text: Atoms,
 }
 
+impl Problem<Element> {
+    pub fn desugar(&self) -> Problem<ElementCore> {
+        let pattern = self.pattern.desugar();
+        let text = self.text.clone();
+        Problem { pattern, text }
+    }
+}
+
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct Pattern {
-    elems: Vec<Element>,
+pub struct Pattern<E> {
+    elems: Vec<E>,
+}
+
+impl Pattern<Element> {
+    pub fn desugar(&self) -> Pattern<ElementCore> {
+        let mut elems = vec![];
+        for elem in &self.elems {
+            match elem {
+                Element::Match(m) => {
+                    elems.push(ElementCore::Match(m.clone()));
+                }
+                Element::Capture(sugar) => {
+                    let inner = sugar.desugar();
+                    elems.push(ElementCore::Capture(inner));
+                }
+                Element::Repetition(repetition) => {
+                    let inner = repetition.inner.desugar();
+                    for _ in 0..repetition.minimum {
+                        elems.extend(inner.elems.iter().cloned());
+                    }
+                    elems.push(ElementCore::Repetition(inner));
+                }
+                Element::Alternative(sugar1, sugar2) => {
+                    let inner1 = sugar1.desugar();
+                    let inner2 = sugar2.desugar();
+                    elems.push(ElementCore::Alternative(inner1, inner2));
+                }
+            }
+        }
+        Pattern { elems }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Element {
     Match(Match),
-    Capture(Pattern),
+    Capture(Pattern<Element>),
     Repetition(Repetition),
-    Alternative(Pattern, Pattern),
+    Alternative(Pattern<Element>, Pattern<Element>),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum ElementCore {
+    Match(Match),
+    Capture(Pattern<ElementCore>),
+    Repetition(Pattern<ElementCore>),
+    Alternative(Pattern<ElementCore>, Pattern<ElementCore>),
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -126,7 +173,7 @@ pub enum Match {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Repetition {
     minimum: usize,
-    inner: Pattern,
+    inner: Pattern<Element>,
 }
 
 // using the term atom as we might eventually match words/lines/etc.
@@ -198,7 +245,7 @@ pub mod test_cases {
 
     // A test case may or may not have a well defined trace
     pub struct TestCase<Trace> {
-        pub problem: Problem,
+        pub problem: Problem<Element>,
         pub score: usize,
         pub trace: Trace
     }
@@ -466,7 +513,7 @@ pub mod test_cases {
         Match::Class(Class::from(wildcard_class))
     }
 
-    pub fn problem(elems: Vec<Element>, text: &str) -> Problem {
+    pub fn problem(elems: Vec<Element>, text: &str) -> Problem<Element> {
         let atoms = text.chars().collect();
         Problem {
             pattern: Pattern { elems },

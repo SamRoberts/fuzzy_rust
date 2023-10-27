@@ -1,4 +1,4 @@
-use crate::{Class, Element, Match, Pattern};
+use crate::{Class, ElementCore, Match, Pattern};
 
 /// A flattened alternative to [`Pattern`], so we can index our position with a single number.
 pub struct FlatPattern {
@@ -17,7 +17,7 @@ impl FlatPattern {
 }
 
 impl FlatPattern {
-    pub fn new(pattern: &Pattern) -> Self {
+    pub fn new(pattern: &Pattern<ElementCore>) -> Self {
         Self::custom(pattern, 0)
     }
 
@@ -38,39 +38,36 @@ impl FlatPattern {
     ///
     /// (In this example, < and > represent the start and end of repetitions.)
     /// ```
-    pub fn custom(pattern: &Pattern, rep_incr: usize) -> Self {
+    pub fn custom(pattern: &Pattern<ElementCore>, rep_incr: usize) -> Self {
         let mut elems = vec![];
         Self::pattern_patts(&mut elems, &pattern, 1, rep_incr);
         FlatPattern { elems }
     }
 
-    fn pattern_patts(result: &mut Vec<Flat>, pattern: &Pattern, reps: usize, rep_incr: usize) {
+    fn pattern_patts(result: &mut Vec<Flat>, pattern: &Pattern<ElementCore>, reps: usize, rep_incr: usize) {
         for elem in pattern.elems.iter() {
             Self::elem_patts(result, elem, reps, rep_incr)
         }
     }
 
-    fn elem_patts(result: &mut Vec<Flat>, elem: &Element, reps: usize, rep_incr: usize) {
+    fn elem_patts(result: &mut Vec<Flat>, elem: &ElementCore, reps: usize, rep_incr: usize) {
         match elem {
-            Element::Match(Match::Lit(c)) =>
+            ElementCore::Match(Match::Lit(c)) =>
                 Self::single_patt(result, Flat::Lit(*c), reps),
-            Element::Match(Match::Class(class)) =>
+            ElementCore::Match(Match::Class(class)) =>
                 Self::single_patt(result, Flat::Class(class.clone()), reps),
-            Element::Capture(inner) => {
+            ElementCore::Capture(inner) => {
                 Self::single_patt(result, Flat::GroupStart, reps);
                 Self::pattern_patts(result, inner, reps, rep_incr);
                 Self::single_patt(result, Flat::GroupEnd, reps);
             }
             // repetition minimum bounds are handled by repeating the inner pattern in front of the
             // unbounded repetition. e.g. converting z+ into zz*, or (ab){2,} into abab(ab)*
-            Element::Repetition(repetition) => {
-                for _ in 0..repetition.minimum {
-                    Self::pattern_patts(result, &repetition.inner, reps, rep_incr);
-                }
+            ElementCore::Repetition(repetition) => {
                 let next_reps = reps + rep_incr;
                 let start_ix = result.len();
                 Self::single_patt(result, Flat::RepetitionStart(0), reps);
-                Self::pattern_patts(result, &repetition.inner, next_reps, rep_incr);
+                Self::pattern_patts(result, repetition, next_reps, rep_incr);
                 let end_ix = result.len();
                 Self::single_patt(result, Flat::RepetitionEnd(0), next_reps);
 
@@ -78,7 +75,7 @@ impl FlatPattern {
                 Self::update_patt(result, Flat::RepetitionStart(off), start_ix, reps);
                 Self::update_patt(result, Flat::RepetitionEnd(off), end_ix, next_reps);
             }
-            Element::Alternative(p1, p2) => {
+            ElementCore::Alternative(p1, p2) => {
                 let left_ix = result.len();
                 Self::single_patt(result, Flat::AlternativeLeft(0), reps);
                 Self::pattern_patts(result, p1, reps, rep_incr);

@@ -4,7 +4,7 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{Match, Problem, Step};
+use crate::{ElementCore, Match, Problem, Step};
 use crate::flat_pattern::{Flat, FlatPattern};
 use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
 
@@ -42,7 +42,7 @@ pub struct Config {
 }
 
 impl LatticeConfig<Ix> for Config {
-    fn new(problem: &Problem) -> Self {
+    fn new(problem: &Problem<ElementCore>) -> Self {
         let pattern = FlatPattern::custom(&problem.pattern, 1);
         let text = problem.text.atoms.clone();
         Config {

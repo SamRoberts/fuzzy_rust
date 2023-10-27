@@ -16,7 +16,7 @@ pub struct RegexQuestion {
 }
 
 impl Question<Error> for RegexQuestion {
-    fn ask(&self) -> Result<Problem, Error> {
+    fn ask(&self) -> Result<Problem<Element>, Error> {
         let pattern = Self::parse_pattern(&self.pattern_regex)?;
         let text = Atoms { atoms: self.text.chars().collect() };
         Ok(Problem { pattern, text })
@@ -24,12 +24,12 @@ impl Question<Error> for RegexQuestion {
 }
 
 impl RegexQuestion {
-    fn parse_pattern(pattern: &str) -> Result<Pattern, Error> {
+    fn parse_pattern(pattern: &str) -> Result<Pattern<Element>, Error> {
         let hir = regex_syntax::parse(pattern)?;
         Self::pattern(Self::parse_impl(&hir))
     }
 
-    fn pattern(try_elems: Result<Vec<Element>, Error>) -> Result<Pattern, Error> {
+    fn pattern(try_elems: Result<Vec<Element>, Error>) -> Result<Pattern<Element>, Error> {
         try_elems.map(|elems| Pattern { elems })
     }
 
