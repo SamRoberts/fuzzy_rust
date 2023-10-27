@@ -1,6 +1,6 @@
 //! Provides an implementation of [`Output`] that mimics git's character-level diff.
 
-use crate::{Output, Match, Problem, Step};
+use crate::{Output, Match, Step};
 use std::fmt;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
@@ -49,7 +49,7 @@ pub struct Same { pub text: Vec<char> }
 pub struct Diff { pub taken: Vec<char>, pub added: Vec<char> }
 
 impl Output for DiffOutput {
-    fn new(_problem: &Problem, _score: &usize, trace: &Vec<Step<Match, char>>) -> Self {
+    fn new(_score: &usize, trace: &Vec<Step<Match, char>>) -> Self {
         let mut chunks = vec![];
         for step in trace.iter() {
             let current_chunk = chunks.last_mut();
@@ -103,7 +103,7 @@ mod tests {
     fn test_new_match_empty() {
         let test_case = TestCase::match_empty();
         let expected = "";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -111,7 +111,7 @@ mod tests {
     fn test_new_match_lit_1() {
         let test_case = TestCase::match_lit_1();
         let expected = "a";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -119,7 +119,7 @@ mod tests {
     fn test_new_match_lit_2() {
         let test_case = TestCase::match_lit_2();
         let expected = "ab";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -127,7 +127,7 @@ mod tests {
     fn test_new_match_class_1() {
         let test_case = TestCase::match_class_1();
         let expected = "a";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -135,7 +135,7 @@ mod tests {
     fn test_new_match_class_2() {
         let test_case = TestCase::match_class_2();
         let expected = "a";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -143,7 +143,7 @@ mod tests {
     fn test_new_match_class_3() {
         let test_case = TestCase::match_class_3();
         let expected = "X";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -151,7 +151,7 @@ mod tests {
     fn test_new_match_repetition_1() {
         let test_case = TestCase::match_repetition_1();
         let expected = "aa";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -159,7 +159,7 @@ mod tests {
     fn test_new_match_repetition_2() {
         let test_case = TestCase::match_repetition_2();
         let expected = "aababb";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -167,7 +167,7 @@ mod tests {
     fn test_new_match_repetition_3() {
         let test_case = TestCase::match_repetition_3();
         let expected = "0451";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -175,7 +175,7 @@ mod tests {
     fn test_new_fail_empty_1() {
         let test_case = TestCase::fail_empty_1();
         let expected = "{+a+}";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -183,7 +183,7 @@ mod tests {
     fn test_new_fail_empty_2() {
         let test_case = TestCase::fail_empty_2();
         let expected = "[-a-]";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -191,7 +191,7 @@ mod tests {
     fn test_new_fail_lit_1() {
         let test_case = TestCase::fail_lit_1();
         let expected = "a{+a+}";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -199,7 +199,7 @@ mod tests {
     fn test_new_fail_lit_2() {
         let test_case = TestCase::fail_lit_2();
         let expected = "a[-b-]a";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -207,7 +207,7 @@ mod tests {
     fn test_new_fail_lit_3() {
         let test_case = TestCase::fail_lit_3();
         let expected = "{+z+}ab[-cd-]{+k+}e";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 
@@ -215,7 +215,7 @@ mod tests {
     fn test_new_fail_class_1() {
         let test_case = TestCase::fail_class_1();
         let expected = "[-?-]{+a+}";
-        let actual = format!("{}", DiffOutput::new(&test_case.problem, &test_case.score, &test_case.trace));
+        let actual = format!("{}", DiffOutput::new(&test_case.score, &test_case.trace));
         assert_eq!(expected, actual);
     }
 }

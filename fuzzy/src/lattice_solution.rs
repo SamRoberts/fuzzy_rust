@@ -1,6 +1,6 @@
 //! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
 
-use crate::{Match, Problem, Solution, Step};
+use crate::{ElementCore, Match, Problem, Solution, Step};
 use crate::flat_pattern::Flat;
 use crate::error::Error;
 use std::fmt::Debug;
@@ -36,7 +36,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
     fn trace_lattice(&self) -> &Vec<Step<Match, char>>;
 
     /// [`Solution::solve`] implementation.
-    fn solve_lattice(problem: &Problem) -> Result<Self, Error> {
+    fn solve_lattice(problem: &Problem<ElementCore>) -> Result<Self, Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
 
@@ -195,13 +195,13 @@ impl <Sln> Solution<Error> for Sln where
         LatticeSolution::trace_lattice(self)
     }
 
-    fn solve(problem: &Problem) -> Result<Self, Error> {
+    fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error> {
         LatticeSolution::solve_lattice(&problem)
     }
 }
 
 pub trait LatticeConfig<Ix> {
-    fn new(problem: &Problem) -> Self;
+    fn new(problem: &Problem<ElementCore>) -> Self;
     fn get(&self, ix: Ix) -> (Option<&Flat>, Option<&char>);
 
     fn start(&self) -> Ix;
@@ -352,13 +352,15 @@ pub mod tests {
     }
 
     pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Match, char>>>) {
-        let actual = Sln::solve(&test_case.problem).unwrap();
+        let desugared = test_case.problem.desugar();
+        let actual = Sln::solve(&desugared).unwrap();
         assert_eq!(test_case.score, *actual.score());
         assert_eq!(test_case.trace, *actual.trace());
     }
 
     pub fn test_solve_for_test_case_with_ambiguous_trace<Sln: LatticeSolution>(test_case: TestCase<()>) {
-        let actual = Sln::solve(&test_case.problem).unwrap();
+        let desugared = test_case.problem.desugar();
+        let actual = Sln::solve(&desugared).unwrap();
         assert_eq!(test_case.score, *actual.score());
     }
 }
