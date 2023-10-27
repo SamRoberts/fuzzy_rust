@@ -67,9 +67,14 @@ impl RegexQuestion {
                     }
                 }
             }
-            hir::HirKind::Repetition(hir::Repetition { min: 0, max: None, sub, .. }) => {
-                Self::pattern(Self::parse_impl(sub)).map(|p|
-                    vec![Element::Repetition(Repetition { minimum: 0, inner: p})]
+            hir::HirKind::Repetition(hir::Repetition { min, max: None, sub, .. }) => {
+                Result::from_iter(
+                    Self::pattern(Self::parse_impl(sub)).map(|p| {
+                        let try_minimum = (*min).try_into().map_err(|_| Error::RegexBoundTooLarge);
+                        try_minimum.map(|minimum|
+                            Element::Repetition(Repetition { minimum, inner: p })
+                        )
+                    })
                 )
             }
             hir::HirKind::Concat(subs) => {
@@ -87,7 +92,7 @@ impl RegexQuestion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_cases::{alt, class, capture, lit, lits, rep};
+    use crate::test_cases::{alt, class, capture, lit, lits, rep, rep_min};
 
     #[test]
     fn parse_lit_1() {
@@ -112,6 +117,16 @@ mod tests {
     #[test]
     fn parse_repetition_1() {
         parse_test("a*", vec![rep(lits("a"))]);
+    }
+
+   #[test]
+   fn parse_repetition_2() {
+        parse_test("a+", vec![rep_min(1, lits("a"))]);
+    }
+
+   #[test]
+   fn parse_repetition_3() {
+        parse_test("a{2,}", vec![rep_min(2, lits("a"))]);
     }
 
     #[test]

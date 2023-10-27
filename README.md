@@ -36,6 +36,7 @@ moment:
 - character ranges: `[abc]`, `[a-zA-Z]`, `[^123]`
 - alternatives: `ab|cd`, `code: [A-Z]|quantity: [0-9]`
 - zero or more repetitions: `a*`, `.(,.)*`
+- repetitions with minimum bounds: `a+`, `[0-9]{4,}`
 - nesting: `(ab*)*`, `(<([0-9]*,)*[0-9]*> )*<([0-9]*,)*[0-9]*>`
 
 For example:
@@ -55,14 +56,13 @@ $ fuzzy -i '(<([0-9]*,)*[0-9]*> )*<([0-9]*,)*[0-9]*>' '<12,34,56> <789> <'
 
 $ fuzzy -i '((title: [a-zA-Z ]*|salary: \$[0-9]*|name: [a-zA-Z ]*), )*' 'name: Andrew Ant, salary: 100,000'
 name: Andrew Ant, salary: [-$-]100{+,+}000[-, -]
+
+$ fuzzy -i '[a-zA-Z]+ [a-zA-Z]+' 'John Smith'
 ```
 
-But fuzzy does not yet support other useful regex features, like bounded repetition:
+But fuzzy does not yet support other useful regex features, like repetitions with a maximum bound:
 
 ```
-$ fuzzy -i 'a+' a
-Error: PatternUnsupported("Repetition(Repetition { min: 1, max: None, greedy: true, sub: Literal(\"a\") })")
-
 $ fuzzy -i 'a{4}' a
 Error: PatternUnsupported("Repetition(Repetition { min: 4, max: Some(4), greedy: true, sub: Literal(\"a\") })")
 ```
@@ -73,6 +73,8 @@ current output does not display this.
 
 Practical uses of Fuzzy
 -----------------------
+**Note:** since these examples were written, we've added support for alternatives and
+minimum repetition bounds. We should update our examples appropriately.
 
 The Fuzzy tool was originally inspired by a scenario where we had to deal with
 tens of thousands of generated code files which had been created from different
