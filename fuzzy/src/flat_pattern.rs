@@ -61,7 +61,12 @@ impl FlatPattern {
                 Self::pattern_patts(result, inner, reps, rep_incr);
                 Self::single_patt(result, Flat::GroupEnd, reps);
             }
+            // repetition minimum bounds are handled by repeating the inner pattern in front of the
+            // unbounded repetition. e.g. converting z+ into zz*, or (ab){2,} into abab(ab)*
             Element::Repetition(repetition) => {
+                for _ in 0..repetition.minimum {
+                    Self::pattern_patts(result, &repetition.inner, reps, rep_incr);
+                }
                 let next_reps = reps + rep_incr;
                 let start_ix = result.len();
                 Self::single_patt(result, Flat::RepetitionStart(0), reps);

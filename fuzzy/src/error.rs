@@ -11,6 +11,8 @@ pub enum Error {
     PatternNotRegex(#[from] regex_syntax::Error),
     #[error("PATTERN has unsupported regex: {0}")]
     PatternUnsupported(String),
+    #[error("PATTERN sets a regex bound that is too large for this architecture")]
+    RegexBoundTooLarge,
     #[error("Internal error: entered an infinite loop at {0} when matching PATTERN against TEXT")]
     InfiniteLoop(String),
     #[error("Internal error: blocked at {0} when matching PATTERN against TEXT")]

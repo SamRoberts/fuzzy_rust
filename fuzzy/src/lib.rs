@@ -341,6 +341,16 @@ pub mod test_cases {
             }
         }
 
+        pub fn match_repetition_4() -> Self {
+            Self {
+                problem: problem(vec![rep_min(1, lits("a"))], "a"),
+                score: 0,
+                trace: vec![
+                    Step::Hit(Match::Lit('a'), 'a'),
+                ],
+            }
+        }
+
         pub fn fail_empty_1() -> Self {
             Self {
                 problem: problem(vec![], "a"),
@@ -424,6 +434,16 @@ pub mod test_cases {
                 ],
             }
         }
+
+        pub fn fail_repetition_2() -> Self {
+            Self {
+                problem: problem(vec![rep_min(1, lits("a"))], ""),
+                score: 1,
+                trace: vec![
+                    Step::SkipPattern(Match::Lit('a')),
+                ],
+            }
+        }
     }
 
     // these cases have multiple optimal traces so can't easily check trace
@@ -472,7 +492,10 @@ pub mod test_cases {
     }
 
     pub fn rep(elems: Vec<Element>) -> Element {
-        let minimum = 0;
+        rep_min(0, elems)
+    }
+
+    pub fn rep_min(minimum: usize, elems: Vec<Element>) -> Element {
         let inner = Pattern { elems };
         Element::Repetition(Repetition { minimum, inner })
     }

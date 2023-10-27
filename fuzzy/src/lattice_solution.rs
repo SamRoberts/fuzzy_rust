@@ -311,6 +311,10 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::match_repetition_3());
     }
 
+    pub fn test_solve_match_repetition_4<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::match_repetition_4());
+    }
+
     pub fn test_solve_fail_empty_1<Sln: LatticeSolution>() {
         test_solve_for_test_case::<Sln>(TestCase::fail_empty_1());
     }
@@ -341,6 +345,10 @@ pub mod tests {
 
     pub fn test_solve_fail_repetition_1<Sln: LatticeSolution>() {
         test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_repetition_1());
+    }
+
+    pub fn test_solve_fail_repetition_2<Sln: LatticeSolution>() {
+        test_solve_for_test_case::<Sln>(TestCase::fail_repetition_2());
     }
 
     pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Match, char>>>) {
