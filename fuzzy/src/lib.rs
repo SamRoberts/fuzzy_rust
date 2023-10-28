@@ -130,12 +130,34 @@ impl Pattern<Element> {
                     let inner = sugar.desugar();
                     elems.push(ElementCore::Capture(inner));
                 }
-                Element::Repetition(repetition) => {
-                    let inner = repetition.inner.desugar();
-                    for _ in 0..repetition.minimum {
+                Element::Repetition(Repetition { maximum: None, minimum, inner: sugar }) => {
+                    let inner = sugar.desugar();
+                    for _ in 0..*minimum {
                         elems.extend(inner.elems.iter().cloned());
                     }
                     elems.push(ElementCore::Repetition(inner));
+                }
+                Element::Repetition(Repetition { maximum: Some(maximum), minimum, inner: sugar }) => {
+                    // We desugar a repetition with a maximum bound as a massive alternative branch
+                    // TODO surely there be a better desugared output
+                    // TODO surely there must also be a better algorithm to build the output
+
+                    let inner = sugar.desugar();
+                    for _ in 0..*minimum {
+                        elems.extend(inner.elems.iter().cloned());
+                    }
+
+                    let empty = Pattern { elems: vec![] };
+                    let mut bounded_loop = empty.clone();
+                    for _ in *minimum..*maximum {
+                        let mut at_least_one_elems = vec![];
+                        at_least_one_elems.extend(inner.elems.iter().cloned());
+                        at_least_one_elems.extend(bounded_loop.elems.iter().cloned());
+
+                        let at_least_one = Pattern { elems: at_least_one_elems };
+                        bounded_loop = Pattern { elems: vec![ElementCore::Alternative(empty.clone(), at_least_one)] };
+                    }
+                    elems.extend(bounded_loop.elems.into_iter())
                 }
                 Element::Alternative(sugar1, sugar2) => {
                     let inner1 = sugar1.desugar();
@@ -173,6 +195,7 @@ pub enum Match {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Repetition {
     minimum: usize,
+    maximum: Option<usize>,
     inner: Pattern<Element>,
 }
 
@@ -398,6 +421,19 @@ pub mod test_cases {
             }
         }
 
+        pub fn match_repetition_5() -> Self {
+            Self {
+                problem: problem(vec![rep_bound(0, 5, lits("a"))], "aaaa"),
+                score: 0,
+                trace: vec![
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                ],
+            }
+        }
+
         pub fn fail_empty_1() -> Self {
             Self {
                 problem: problem(vec![], "a"),
@@ -491,6 +527,17 @@ pub mod test_cases {
                 ],
             }
         }
+
+        pub fn fail_repetition_3() -> Self {
+            Self {
+                problem: problem(vec![rep_bound(0, 1, lits("a"))], "aa"),
+                score: 1,
+                trace: vec![
+                    Step::SkipText('a'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                ],
+            }
+        }
     }
 
     // these cases have multiple optimal traces so can't easily check trace
@@ -543,8 +590,15 @@ pub mod test_cases {
     }
 
     pub fn rep_min(minimum: usize, elems: Vec<Element>) -> Element {
+        let maximum = None;
         let inner = Pattern { elems };
-        Element::Repetition(Repetition { minimum, inner })
+        Element::Repetition(Repetition { minimum, maximum, inner })
+    }
+
+    pub fn rep_bound(minimum: usize, maximum: usize, elems: Vec<Element>) -> Element {
+        let max_opt = Some(maximum);
+        let inner = Pattern { elems };
+        Element::Repetition(Repetition { minimum, maximum: max_opt, inner })
     }
 
     pub fn alt(left: Vec<Element>, right: Vec<Element>) -> Element {
