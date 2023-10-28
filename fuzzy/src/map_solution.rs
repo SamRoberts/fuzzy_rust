@@ -233,6 +233,11 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_repetition_5() {
+        tests::test_solve_match_repetition_5::<MapSolution>();
+    }
+
+    #[test]
     fn test_solve_fail_empty_1() {
         tests::test_solve_fail_empty_1::<MapSolution>();
     }
@@ -275,5 +280,10 @@ mod tests {
     #[test]
     fn test_solve_fail_repetition_2() {
         tests::test_solve_fail_repetition_2::<MapSolution>();
+    }
+
+    #[test]
+    fn test_solve_fail_repetition_3() {
+        tests::test_solve_fail_repetition_3::<MapSolution>();
     }
 }

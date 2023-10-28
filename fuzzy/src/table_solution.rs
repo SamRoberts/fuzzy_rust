@@ -303,6 +303,11 @@ mod tests {
     }
 
     #[test]
+    fn test_solve_match_repetition_5() {
+        tests::test_solve_match_repetition_5::<TableSolution>();
+    }
+
+    #[test]
     fn test_solve_fail_empty_1() {
         tests::test_solve_fail_empty_1::<TableSolution>();
     }
@@ -345,5 +350,10 @@ mod tests {
     #[test]
     fn test_solve_fail_repetition_2() {
         tests::test_solve_fail_repetition_2::<TableSolution>();
+    }
+
+    #[test]
+    fn test_solve_fail_repetition_3() {
+        tests::test_solve_fail_repetition_3::<TableSolution>();
     }
 }

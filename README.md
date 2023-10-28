@@ -28,15 +28,13 @@ that no changes are required in the text there. On the other hand, the text had
 a lower-case `w` compared to the pattern's capital, so fuzzy reported the
 change.
 
-Fuzzy only supports a small number of regex features in the pattern at the
-moment:
+Fuzzy supports many common regex features at the moment:
 
 - literals: `abc`, `\(abc\)`
 - wildcards: `.`
 - character ranges: `[abc]`, `[a-zA-Z]`, `[^123]`
 - alternatives: `ab|cd`, `code: [A-Z]|quantity: [0-9]`
-- zero or more repetitions: `a*`, `.(,.)*`
-- repetitions with minimum bounds: `a+`, `[0-9]{4,}`
+- repetitions: `a*`, `a+`, `a?`, `.(,.)*`, `[0-9]{4}`
 - nesting: `(ab*)*`, `(<([0-9]*,)*[0-9]*> )*<([0-9]*,)*[0-9]*>`
 
 For example:
@@ -58,14 +56,16 @@ $ fuzzy -i '((title: [a-zA-Z ]*|salary: \$[0-9]*|name: [a-zA-Z ]*), )*' 'name: A
 name: Andrew Ant, salary: [-$-]100{+,+}000[-, -]
 
 $ fuzzy -i '[a-zA-Z]+ [a-zA-Z]+' 'John Smith'
+John Smith
+
+$ fuzzy -i '[0-9]{4}' "'69"
+{+'+}69[-??-]
 ```
 
-But fuzzy does not yet support other useful regex features, like repetitions with a maximum bound:
-
-```
-$ fuzzy -i 'a{4}' a
-Error: PatternUnsupported("Repetition(Repetition { min: 4, max: Some(4), greedy: true, sub: Literal(\"a\") })")
-```
+But fuzzy does not support all regex features, and at the moment it may even silently
+ignore unsupported regex flags. This will need to be better defined in the future. Fuzzy
+may also depart from regex features in the future and offer additional functionality to
+help match files with highly structured syntax (see practical uses of fuzzy below).
 
 The underlying fuzzy algorithm keeps track of how closely the text matches the
 pattern, and also records what text was captured by `()` groups, but the tool's
