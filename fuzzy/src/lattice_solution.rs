@@ -259,107 +259,11 @@ pub struct Next<Ix> {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub mod test_logic {
     use super::*;
     use crate::test_cases::TestCase;
 
-    pub fn test_solve_match_empty<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_empty());
-    }
-
-    pub fn test_solve_match_lit_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_lit_1());
-    }
-
-    pub fn test_solve_match_lit_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_lit_2());
-    }
-
-    pub fn test_solve_match_class_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_class_1());
-    }
-
-    pub fn test_solve_match_class_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_class_2());
-    }
-
-    pub fn test_solve_match_class_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_class_3());
-    }
-
-    pub fn test_solve_match_alternative_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_alternative_1());
-    }
-
-    pub fn test_solve_match_alternative_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_alternative_2());
-    }
-
-    pub fn test_solve_match_alternative_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_alternative_3());
-    }
-
-    pub fn test_solve_match_repetition_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_repetition_1());
-    }
-
-    pub fn test_solve_match_repetition_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_repetition_2());
-    }
-
-    pub fn test_solve_match_repetition_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_repetition_3());
-    }
-
-    pub fn test_solve_match_repetition_4<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_repetition_4());
-    }
-
-    pub fn test_solve_match_repetition_5<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::match_repetition_5());
-    }
-
-    pub fn test_solve_fail_empty_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_empty_1());
-    }
-
-    pub fn test_solve_fail_empty_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_empty_2());
-    }
-
-    pub fn test_solve_fail_lit_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_lit_1());
-    }
-
-    pub fn test_solve_fail_lit_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_lit_2());
-    }
-
-    pub fn test_solve_fail_lit_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_lit_3());
-    }
-
-    pub fn test_solve_fail_class_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_class_1());
-    }
-
-    pub fn test_solve_fail_alternative_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_alternative_1());
-    }
-
-    pub fn test_solve_fail_repetition_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_repetition_1());
-    }
-
-    pub fn test_solve_fail_repetition_2<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_repetition_2());
-    }
-
-    pub fn test_solve_fail_repetition_3<Sln: LatticeSolution>() {
-        test_solve_for_test_case::<Sln>(TestCase::fail_repetition_3());
-    }
-
-    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase) {
+    pub fn test_solve<Sln: LatticeSolution>(test_case: TestCase) {
         let desugared = test_case.problem.desugar();
         let actual = Sln::solve(&desugared).unwrap();
         assert_eq!(test_case.score, *actual.score());
