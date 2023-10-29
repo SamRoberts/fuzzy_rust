@@ -348,7 +348,7 @@ pub mod tests {
     }
 
     pub fn test_solve_fail_repetition_1<Sln: LatticeSolution>() {
-        test_solve_for_test_case_with_ambiguous_trace::<Sln>(TestCase::fail_repetition_1());
+        test_solve_for_test_case::<Sln>(TestCase::fail_repetition_1());
     }
 
     pub fn test_solve_fail_repetition_2<Sln: LatticeSolution>() {
@@ -359,16 +359,10 @@ pub mod tests {
         test_solve_for_test_case::<Sln>(TestCase::fail_repetition_3());
     }
 
-    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase<Vec<Step<Match, char>>>) {
+    pub fn test_solve_for_test_case<Sln: LatticeSolution>(test_case: TestCase) {
         let desugared = test_case.problem.desugar();
         let actual = Sln::solve(&desugared).unwrap();
         assert_eq!(test_case.score, *actual.score());
         assert_eq!(test_case.trace, *actual.trace());
-    }
-
-    pub fn test_solve_for_test_case_with_ambiguous_trace<Sln: LatticeSolution>(test_case: TestCase<()>) {
-        let desugared = test_case.problem.desugar();
-        let actual = Sln::solve(&desugared).unwrap();
-        assert_eq!(test_case.score, *actual.score());
     }
 }

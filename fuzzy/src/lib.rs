@@ -266,14 +266,13 @@ pub mod test_cases {
     use super::*;
     use regex_syntax::hir::HirKind;
 
-    // A test case may or may not have a well defined trace
-    pub struct TestCase<Trace> {
+    pub struct TestCase {
         pub problem: Problem<Element>,
         pub score: usize,
-        pub trace: Trace
+        pub trace: Vec<Step<Match, char>>,
     }
 
-    impl TestCase<Vec<Step<Match, char>>> {
+    impl TestCase {
         pub fn match_empty() -> Self {
             Self {
                 problem: problem(vec![], ""),
@@ -518,6 +517,18 @@ pub mod test_cases {
             }
         }
 
+        pub fn fail_repetition_1() -> Self {
+            Self {
+                problem: problem(vec![rep(lits("a"))], "aba"),
+                score: 1,
+                trace: vec![
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipText('b'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                ],
+            }
+        }
+
         pub fn fail_repetition_2() -> Self {
             Self {
                 problem: problem(vec![rep_min(1, lits("a"))], ""),
@@ -536,17 +547,6 @@ pub mod test_cases {
                     Step::SkipText('a'),
                     Step::Hit(Match::Lit('a'), 'a'),
                 ],
-            }
-        }
-    }
-
-    // these cases have multiple optimal traces so can't easily check trace
-    impl TestCase<()> {
-        pub fn fail_repetition_1() -> Self {
-            Self {
-                problem: problem(vec![rep(lits("a"))], "aba"),
-                score: 1,
-                trace: (),
             }
         }
     }
