@@ -281,6 +281,26 @@ pub mod test_cases {
             }
         }
 
+        pub fn fail_empty_1() -> Self {
+            Self {
+                problem: problem(vec![], "a"),
+                score: 1,
+                trace: vec![
+                    Step::SkipText('a'),
+                ],
+            }
+        }
+
+        pub fn fail_empty_2() -> Self {
+            Self {
+                problem: problem(lits("a"), ""),
+                score: 1,
+                trace: vec![
+                    Step::SkipPattern(Match::Lit('a')),
+                ],
+            }
+        }
+
         pub fn match_lit_1() -> Self {
             Self {
                 problem: problem(lits("a"), "a"),
@@ -298,6 +318,46 @@ pub mod test_cases {
                 trace: vec![
                     Step::Hit(Match::Lit('a'), 'a'),
                     Step::Hit(Match::Lit('b'), 'b'),
+                ],
+            }
+        }
+
+        pub fn fail_lit_1() -> Self {
+            Self {
+                problem: problem(lits("a"), "aa"),
+                score: 1,
+                trace: vec![
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipText('a'),
+                ],
+            }
+        }
+
+        pub fn fail_lit_2() -> Self {
+            Self {
+                problem: problem(lits("aba"), "aa"),
+                score: 1,
+                trace: vec![
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipPattern(Match::Lit('b')),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                ],
+            }
+        }
+
+        pub fn fail_lit_3() -> Self {
+            Self {
+                problem: problem(lits("abcde"), "zabke"),
+                score: 4,
+                trace: vec![
+                    Step::SkipText('z'),
+                    Step::Hit(Match::Lit('a'), 'a'),
+                    Step::Hit(Match::Lit('b'), 'b'),
+                    // TODO handle valid possibility that the order of next three steps is changed
+                    Step::SkipText('k'),
+                    Step::SkipPattern(Match::Lit('c')),
+                    Step::SkipPattern(Match::Lit('d')),
+                    Step::Hit(Match::Lit('e'), 'e'),
                 ],
             }
         }
@@ -328,6 +388,18 @@ pub mod test_cases {
                 score: 0,
                 trace: vec![
                     Step::Hit(patt_class("[a-zA-Z]"), 'X'),
+                ],
+            }
+        }
+
+        pub fn fail_class_1() -> Self {
+            Self {
+                problem: problem(vec![class("[^a]")], "a"),
+                score: 2,
+                trace: vec![
+                    // TODO handle valid possibility that the order of next two steps is reversed
+                    Step::SkipText('a'),
+                    Step::SkipPattern(patt_class("[^a]")),
                 ],
             }
         }
@@ -367,6 +439,18 @@ pub mod test_cases {
                 trace: vec![
                     Step::Hit(Match::Lit('c'), 'c'),
                     Step::Hit(Match::Lit('z'), 'z'),
+                ],
+            }
+        }
+
+        pub fn fail_alternative_1() -> Self {
+            Self {
+                problem: problem(vec![alt(lits("ab"), lits("cd"))], "acd"),
+                score: 1,
+                trace: vec![
+                    Step::SkipText('a'),
+                    Step::Hit(Match::Lit('c'), 'c'),
+                    Step::Hit(Match::Lit('d'), 'd'),
                 ],
             }
         }
@@ -429,90 +513,6 @@ pub mod test_cases {
                     Step::Hit(Match::Lit('a'), 'a'),
                     Step::Hit(Match::Lit('a'), 'a'),
                     Step::Hit(Match::Lit('a'), 'a'),
-                ],
-            }
-        }
-
-        pub fn fail_empty_1() -> Self {
-            Self {
-                problem: problem(vec![], "a"),
-                score: 1,
-                trace: vec![
-                    Step::SkipText('a'),
-                ],
-            }
-        }
-
-        pub fn fail_empty_2() -> Self {
-            Self {
-                problem: problem(lits("a"), ""),
-                score: 1,
-                trace: vec![
-                    Step::SkipPattern(Match::Lit('a')),
-                ],
-            }
-        }
-
-        pub fn fail_lit_1() -> Self {
-            Self {
-                problem: problem(lits("a"), "aa"),
-                score: 1,
-                trace: vec![
-                    Step::Hit(Match::Lit('a'), 'a'),
-                    Step::SkipText('a'),
-                ],
-            }
-        }
-
-        pub fn fail_lit_2() -> Self {
-            Self {
-                problem: problem(lits("aba"), "aa"),
-                score: 1,
-                trace: vec![
-                    Step::Hit(Match::Lit('a'), 'a'),
-                    Step::SkipPattern(Match::Lit('b')),
-                    Step::Hit(Match::Lit('a'), 'a'),
-                ],
-            }
-        }
-
-        pub fn fail_lit_3() -> Self {
-            Self {
-                problem: problem(lits("abcde"), "zabke"),
-                score: 4,
-                trace: vec![
-                    Step::SkipText('z'),
-                    Step::Hit(Match::Lit('a'), 'a'),
-                    Step::Hit(Match::Lit('b'), 'b'),
-                    // TODO handle valid possibility that the order of next three steps is changed
-                    Step::SkipText('k'),
-                    Step::SkipPattern(Match::Lit('c')),
-                    Step::SkipPattern(Match::Lit('d')),
-                    Step::Hit(Match::Lit('e'), 'e'),
-                ],
-            }
-        }
-
-        pub fn fail_class_1() -> Self {
-            Self {
-                problem: problem(vec![class("[^a]")], "a"),
-                score: 2,
-                trace: vec![
-                    // TODO handle valid possibility that the order of next two steps is reversed
-                    Step::SkipText('a'),
-                    Step::SkipPattern(patt_class("[^a]")),
-                ],
-            }
-        }
-
-        pub fn fail_alternative_1() -> Self {
-            Self {
-                problem: problem(vec![alt(lits("ab"), lits("cd"))], "acd"),
-                score: 1,
-                trace: vec![
-                    Step::SkipText('a'),
-                    Step::Hit(Match::Lit('c'), 'c'),
-                    Step::Hit(Match::Lit('d'), 'd'),
                 ],
             }
         }
