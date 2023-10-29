@@ -12,3 +12,6 @@ publish.workspace = true
 [dependencies]
 regex-syntax.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+test-case.workspace = true

@@ -235,125 +235,35 @@ impl LatticeIx<Config> for Ix {
 #[cfg(test)]
 mod tests {
     use super::TableSolution;
-    use crate::lattice_solution::tests;
+    use crate::test_cases::TestCase;
+    use crate::lattice_solution::test_logic;
+    use test_case::test_case;
 
-    #[test]
-    fn test_solve_match_empty() {
-        tests::test_solve_match_empty::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_lit_1() {
-        tests::test_solve_match_lit_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_lit_2() {
-        tests::test_solve_match_lit_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_class_1() {
-        tests::test_solve_match_class_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_class_2() {
-        tests::test_solve_match_class_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_class_3() {
-        tests::test_solve_match_class_3::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_alternative_1() {
-        tests::test_solve_match_alternative_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_alternative_2() {
-        tests::test_solve_match_alternative_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_alternative_3() {
-        tests::test_solve_match_alternative_3::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_repetition_1() {
-        tests::test_solve_match_repetition_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_repetition_2() {
-        tests::test_solve_match_repetition_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_repetition_3() {
-        tests::test_solve_match_repetition_3::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_repetition_4() {
-        tests::test_solve_match_repetition_4::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_match_repetition_5() {
-        tests::test_solve_match_repetition_5::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_empty_1() {
-        tests::test_solve_fail_empty_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_empty_2() {
-        tests::test_solve_fail_empty_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_lit_1() {
-        tests::test_solve_fail_lit_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_lit_2() {
-        tests::test_solve_fail_lit_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_lit_3() {
-        tests::test_solve_fail_lit_3::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_class_1() {
-        tests::test_solve_fail_class_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_alternative_1() {
-        tests::test_solve_fail_alternative_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_repetition_1() {
-        tests::test_solve_fail_repetition_1::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_repetition_2() {
-        tests::test_solve_fail_repetition_2::<TableSolution>();
-    }
-
-    #[test]
-    fn test_solve_fail_repetition_3() {
-        tests::test_solve_fail_repetition_3::<TableSolution>();
+    #[test_case(TestCase::match_empty())]
+    #[test_case(TestCase::fail_empty_1())]
+    #[test_case(TestCase::fail_empty_2())]
+    #[test_case(TestCase::match_lit_1())]
+    #[test_case(TestCase::match_lit_2())]
+    #[test_case(TestCase::fail_lit_1())]
+    #[test_case(TestCase::fail_lit_2())]
+    #[test_case(TestCase::fail_lit_3())]
+    #[test_case(TestCase::match_class_1())]
+    #[test_case(TestCase::match_class_2())]
+    #[test_case(TestCase::match_class_3())]
+    #[test_case(TestCase::fail_class_1())]
+    #[test_case(TestCase::match_alternative_1())]
+    #[test_case(TestCase::match_alternative_2())]
+    #[test_case(TestCase::match_alternative_3())]
+    #[test_case(TestCase::fail_alternative_1())]
+    #[test_case(TestCase::match_repetition_1())]
+    #[test_case(TestCase::match_repetition_2())]
+    #[test_case(TestCase::match_repetition_3())]
+    #[test_case(TestCase::match_repetition_4())]
+    #[test_case(TestCase::match_repetition_5())]
+    #[test_case(TestCase::fail_repetition_1())]
+    #[test_case(TestCase::fail_repetition_2())]
+    #[test_case(TestCase::fail_repetition_3())]
+    fn test_solve(test: TestCase) {
+        test_logic::test_solve::<TableSolution>(test);
     }
 }
