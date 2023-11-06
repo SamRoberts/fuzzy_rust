@@ -73,8 +73,8 @@ current output does not display this.
 
 Practical uses of Fuzzy
 -----------------------
-**Note:** since these examples were written, we've added support for alternatives and
-minimum repetition bounds. We should update our examples appropriately.
+**Note: this section was written with an older version of our Cargo file, and an older
+version of fuzzy with less features. We need to update it appropriately.**
 
 The Fuzzy tool was originally inspired by a scenario where we had to deal with
 tens of thousands of generated code files which had been created from different

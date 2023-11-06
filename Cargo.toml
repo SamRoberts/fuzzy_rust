@@ -15,6 +15,7 @@ publish = false # don't publish anywhere, for now
 [workspace.dependencies]
 fuzzy = { path = "fuzzy" }
 
+nonempty = "0.8.1"
 regex-syntax = "0.7.5"
 thiserror = "1.0.48"
 
