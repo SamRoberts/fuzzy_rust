@@ -6,7 +6,7 @@
 
 use crate::{ElementCore, Match, Problem, Step};
 use crate::flat_pattern::{Flat, FlatPattern};
-use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Next, Node};
+use crate::lattice_solution::{LatticeConfig, LatticeIx, LatticeSolution, LatticeState, Node, StepType};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
@@ -45,10 +45,7 @@ impl LatticeConfig<Ix> for Config {
     fn new(problem: &Problem<ElementCore>) -> Self {
         let pattern = FlatPattern::custom(&problem.pattern, 1);
         let text = problem.text.atoms.clone();
-        Config {
-            text: text,
-            pattern: pattern,
-        }
+        Config { text, pattern }
     }
 
     fn get(&self, ix: Ix) -> (Option<&Flat>, Option<&char>) {
@@ -68,107 +65,62 @@ impl LatticeConfig<Ix> for Config {
         }
     }
 
-    fn skip_text(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            text: ix.text + 1,
-            rep_off: 0,
-            ..ix
-        };
-        Next { cost: 1, next, step: Some(Step::SkipText(())) }
-    }
-
-    fn skip_patt(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            ..ix
-        };
-        Next { cost: 1, next, step: Some(Step::SkipPattern(())) }
-    }
-
-    fn hit(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            text: ix.text + 1,
-            pattern: ix.pattern + ix.reps,
-            rep_off: 0,
-            ..ix
-        };
-        Next { cost: 0, next, step: Some(Step::Hit((),())) }
-    }
-
-    fn start_group(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            ..ix
-        };
-        Next { cost: 0, next, step: Some(Step::StartCapture) }
-    }
-
-    fn stop_group(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            ..ix
-        };
-        Next { cost: 0, next, step: Some(Step::StopCapture) }
-    }
-
-    fn start_left(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn start_right(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + off + ix.reps,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn pass_right(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + off,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn start_repetition(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            reps: ix.reps + 1,
-            rep_off: ix.rep_off + 1,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn end_repetition(&self, ix: Ix) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + ix.reps,
-            reps: ix.reps - 1,
-            rep_off: ix.rep_off - 1,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn pass_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern + off + ix.reps + 1,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
-    }
-
-    fn restart_repetition(&self, ix: Ix, off: usize) -> Next<Ix> {
-        let next = Ix {
-            pattern: ix.pattern - off,
-            ..ix
-        };
-        Next { cost: 0, next, step: None }
+    fn step(&self, ix: Ix, step_type: StepType) -> Ix {
+        match step_type {
+            StepType::Hit =>
+                Ix {
+                    pattern: ix.pattern + ix.reps,
+                    text: ix.text + 1,
+                    rep_off: 0,
+                    ..ix
+                },
+            StepType::SkipText =>
+                Ix {
+                    text: ix.text + 1,
+                    rep_off: 0,
+                    ..ix
+                },
+            StepType::SkipPattern | StepType::StartGroup | StepType::EndGroup | StepType::StartLeft =>
+                Ix {
+                    pattern: ix.pattern + ix.reps,
+                    ..ix
+                },
+            StepType::StartRight(off) =>
+                Ix {
+                    pattern: ix.pattern + off + ix.reps,
+                    ..ix
+                },
+            StepType::PassRight(off) =>
+                Ix {
+                    pattern: ix.pattern + off,
+                    ..ix
+                },
+            StepType::StartRepetition =>
+                Ix {
+                    pattern: ix.pattern + ix.reps,
+                    reps: ix.reps + 1,
+                    rep_off: ix.rep_off + 1,
+                    ..ix
+                },
+            StepType::EndRepetition =>
+                Ix {
+                    pattern: ix.pattern + ix.reps,
+                    reps: ix.reps - 1,
+                    rep_off: ix.rep_off - 1,
+                    ..ix
+                },
+            StepType::PassRepetition(off) =>
+                Ix {
+                    pattern: ix.pattern + off + ix.reps + 1,
+                    ..ix
+                },
+            StepType::RestartRepetition(off) =>
+                Ix {
+                    pattern: ix.pattern - off,
+                    reps: ix.reps - 1,
+                    ..ix
+                },
+        }
     }
 }
 
@@ -189,15 +141,21 @@ impl LatticeState<Config, Ix> for State {
         let pattern_len = conf.pattern.len() + 1;
         let text_len = conf.text.len() + 1;
         let num_nodes = text_len * pattern_len;
+        let nodes = Vec::from_iter((0..num_nodes).into_iter().map(|_| Node::new()));
         State {
-            nodes: vec![Node::Ready; num_nodes],
+            nodes,
             pattern_len,
         }
     }
 
-    fn get(&self, ix: Ix) -> Node<Ix> {
+    fn get(&self, ix: Ix) -> &Node<Ix> {
         let node_ix = self.node(ix);
-        self.nodes[node_ix]
+        &self.nodes[node_ix]
+    }
+
+    fn get_mut(&mut self, ix: Ix) -> &mut Node<Ix> {
+        let node_ix = self.node(ix);
+        &mut self.nodes[node_ix]
     }
 
     fn set(&mut self, ix: Ix, node: Node<Ix>) {
@@ -207,7 +165,7 @@ impl LatticeState<Config, Ix> for State {
 }
 
 /// Indexes into [`State`].
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Ix {
     /// The index into the [flattened `Problem::pattern`](crate::flat_pattern::FlatPattern).
     pub pattern: usize,

@@ -354,9 +354,9 @@ pub mod test_cases {
                     Step::Hit(Match::Lit('a'), 'a'),
                     Step::Hit(Match::Lit('b'), 'b'),
                     // TODO handle valid possibility that the order of next three steps is changed
-                    Step::SkipText('k'),
                     Step::SkipPattern(Match::Lit('c')),
                     Step::SkipPattern(Match::Lit('d')),
+                    Step::SkipText('k'),
                     Step::Hit(Match::Lit('e'), 'e'),
                 ],
             }
@@ -398,8 +398,8 @@ pub mod test_cases {
                 score: 2,
                 trace: vec![
                     // TODO handle valid possibility that the order of next two steps is reversed
-                    Step::SkipText('a'),
                     Step::SkipPattern(patt_class("[^a]")),
+                    Step::SkipText('a'),
                 ],
             }
         }
@@ -544,8 +544,8 @@ pub mod test_cases {
                 problem: problem(vec![rep_bound(0, 1, lits("a"))], "aa"),
                 score: 1,
                 trace: vec![
-                    Step::SkipText('a'),
                     Step::Hit(Match::Lit('a'), 'a'),
+                    Step::SkipText('a'),
                 ],
             }
         }
