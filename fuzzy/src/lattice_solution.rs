@@ -238,7 +238,7 @@ pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized + Defa
 //
 // 1. A node is Ready if current == 0
 // 2. A node is Working if 1 >= current >= step_types.len()
-// 3. A node is Done if current == step_types.len()
+// 3. A node is Done if current == step_types.len() + 1
 //
 // When a node is working, the current step type being attempted is step_types[current-1].
 //
