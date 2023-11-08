@@ -6,7 +6,12 @@ use crate::error::Error;
 use nonempty::{NonEmpty, nonempty};
 use std::fmt::Debug;
 
-/// A naive family of "recurse through a lattice" [`Solution`] implementations.
+/// A family of [`Solution`] implementations which record state in a lattice of nodes.
+///
+/// For now, this trait hardcodes the use of a flattened pattern which is easier to index, hardcodes
+/// the node structure, and also the algorithm used to traverse nodes and update their state.
+/// The way in which individual implementations store and index nodes is configurable. In the
+/// future, as we add more features, we may make other parts of the implementation configurable.
 ///
 /// [`LatticeSolution`] implementations get [`Solution::solve`] defined automatically. Instead,
 /// implementations are required to specify a mutable [`State`](LatticeSolution::State) space
@@ -19,9 +24,6 @@ use std::fmt::Debug;
 /// Implementation must ensure that [`can_restart`](LatticeIx::can_restart) is implemented
 /// correctly, so that these links never form a loop. These links form a
 /// [lattice](https://en.wikipedia.org/wiki/Lattice_(order)).
-///
-/// [`LatticeSolution`] implements [`Solution::solve`] by naively recursing through this lattice,
-/// recording the optimal score for each index in [`State`](LatticeSolution::State) as it goes.
 pub trait LatticeSolution : Sized  + Solution<Error> {
     /// Carries immutable information derived from the [`Problem`](crate::Problem) being solved.
     type Conf: LatticeConfig<Self::Ix>;
@@ -44,7 +46,7 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         let start_ix = conf.start();
         let end_ix = conf.end();
 
-        let _ = Self::solve_ix(&conf, &mut state)?;
+        let _ = Self::calculate_optimal_path(&conf, &mut state)?;
 
         let start_node = state.get(start_ix);
         let score = start_node.done_info()
@@ -81,11 +83,9 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
         Ok(LatticeSolution::new(score, trace))
     }
 
-    /// Update [`State`](LatticeSolution::State) with the optimal steps from the current
+    /// Update [`State`](LatticeSolution::State) with the optimal steps from the start
     /// [`Ix`](LatticeSolution::Ix) onwards.
-    ///
-    /// `lead` is the step taken to arrive at the [`Ix`](LatticeSolution::Ix) we are solving.
-    fn solve_ix(
+    fn calculate_optimal_path(
         conf: &Self::Conf,
         state: &mut Self::State,
      ) -> Result<(), Error> {
@@ -212,13 +212,50 @@ pub trait LatticeIx<Conf> : Eq + PartialEq + Copy + Clone + Debug + Sized + Defa
     fn can_restart(&self) -> bool;
 }
 
+// TODO make a better Node type
+//
+// Calculate_optimal_path (originally called solve_ix) used to store a lot of state on the stack:
+// the parent node, our progress through the possible step types, the optimal score, etc. The
+// node was a simple enum which was either Ready, Working, or Done. Only the Done value had any
+// fields, and it was never mutated.
+//
+// Once we began to run out of stack space for mid-sized use-cases, we transferred all of that
+// state into the heap by adding it to this Node struct. Much of this information is mutated as we
+// try out each possible step type.
+//
+// I had a lot of trouble implementing this expanded node. Solve loops over my table of node
+// values, taking a mutable reference to a single node in each iteration. My code originally
+// pattern matched on the Node enum, and called methods on inner types which could only be accessed
+// when node had the right case. But I struggled to do this and satisfy rust's borrow checker.
+//
+// For now, I've abandonded pattern matching and type safety, and implemented rust as an abstract
+// data type. The node still has three states: Ready, Working, and Done, but they aren't reflected
+// in rust's type system. Instead, Node methods return errors if they are called when the node is
+// in the wrong state.
+//
+// The three states are a bit implicit in the Node structure. They are driven by current. Current
+// changes from 0..=step_types.len()+1 over the life of the Node:
+//
+// 1. A node is Ready if current == 0
+// 2. A node is Working if 1 >= current >= step_types.len()
+// 3. A node is Done if current == step_types.len()
+//
+// When a node is working, the current step type being attempted is step_types[current-1].
+//
+// When a node has processed at least one node (current >= 2), score/step_type/next record the
+// optimal choice among step_types[0..current-1]. This means those fields are optimal when a Node
+// is Done.
+//
+// I'd like to return to this Node when I'm more comfortable working with rust, and do a better job
+// implementing it.
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Node<Ix: Clone + Sized> {
+    current: usize,
     parent: Ix,
     score: usize,
     step_type: StepType,
     next: Ix,
-    current: usize,
     step_types: Vec<StepType>,
 }
 
@@ -323,7 +360,7 @@ pub enum NodeType {
 
 impl NodeType {
     fn get<Conf, Ix: LatticeIx<Conf>>(opt_flat: Option<&Flat>, opt_text: Option<&char>, ix: &Ix) -> Option<Self> {
-        // TODO this is really, really hard to follow for something conceptually simple. Can I make it nicer?
+        // TODO this is surprisingly hard to follow for something conceptually simple. Can I make it nicer?
         match opt_flat {
             None if opt_text == None => None,
             None => Some(NodeType::FinishedPattern),
