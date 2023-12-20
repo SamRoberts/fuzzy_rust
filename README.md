@@ -59,7 +59,7 @@ $ fuzzy -i '[a-zA-Z]+ [a-zA-Z]+' 'John Smith'
 John Smith
 
 $ fuzzy -i '[0-9]{4}' "'69"
-{+'+}69[-??-]
+[-??-]{+'+}69
 ```
 
 But fuzzy does not support all regex features, and at the moment it may even silently
