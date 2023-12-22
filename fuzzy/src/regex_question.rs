@@ -94,6 +94,7 @@ impl RegexQuestion {
 mod tests {
     use super::*;
     use crate::test_cases::{alt, class, capture, lit, lits, rep, rep_min, rep_bound};
+    use proptest::prelude::*;
 
     #[test]
     fn parse_lit_1() {
@@ -159,5 +160,47 @@ mod tests {
         let expected_pattern = Pattern { elems: expected_elems };
         let actual_pattern = RegexQuestion::parse_pattern(&pattern).expect("Cannot parse pattern");
         assert_eq!(expected_pattern, actual_pattern);
+    }
+
+    // TODO support parsing empty patterns
+    // TODO more accurate range of literal patterns here
+    const LITERAL_PATTERN_REGEX: &str = "[[:alnum:]]+";
+
+    proptest! {
+        #[test]
+        fn smoketest(pattern in "\\PC*") {
+            let _ = RegexQuestion::parse_pattern(&pattern);
+        }
+
+        #[test]
+        fn literals(pattern in LITERAL_PATTERN_REGEX) {
+            let expected_pattern = Pattern { elems: lits(&pattern) };
+            let actual_pattern = RegexQuestion::parse_pattern(&pattern).expect("Cannot parse pattern");
+            prop_assert_eq!(expected_pattern, actual_pattern);
+        }
+
+        #[test]
+        fn captures(inner in LITERAL_PATTERN_REGEX) {
+            let wrapped = format!("({})", inner);
+            let Pattern { elems: actual_inner } = RegexQuestion::parse_pattern(&inner).expect("Cannot parse inner");
+            let Pattern { elems: actual_wrapped } = RegexQuestion::parse_pattern(&wrapped).expect("Cannot parse wrapped");
+            prop_assert_eq!( actual_wrapped, vec![capture(actual_inner)]);
+        }
+
+        #[test]
+        fn alternatives(inners in prop::collection::vec(LITERAL_PATTERN_REGEX, 2..5)) {
+            // the regex lib is smart enough to turn an alternative of single characters into a
+            // character class ... which is good, but annoying for this particular test
+            prop_assume!(inners.iter().any(|inner| inner.len() > 1));
+
+            let alt_pattern = inners.join("|");
+            let expected_alt = inners.iter()
+                .map(|inner| lits(&inner))
+                .reduce(|acc, right| vec![alt(acc, right)]).expect("Cannot be empty");
+
+            let expected_pattern = Pattern { elems: expected_alt };
+            let actual_pattern = RegexQuestion::parse_pattern(&alt_pattern).expect("Cannot parse pattern");
+            prop_assert_eq!(expected_pattern, actual_pattern);
+        }
     }
 }
