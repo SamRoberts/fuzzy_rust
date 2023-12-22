@@ -32,5 +32,6 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 
 test-case = "3.2.1"
+proptest = "1.4.0"
 assert_cmd = "2.0.12"
 tempfile = "3.8.1"
