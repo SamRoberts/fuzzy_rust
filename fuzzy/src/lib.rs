@@ -52,7 +52,6 @@ use regex_syntax::hir;
 
 pub mod regex_question;
 pub mod lattice_solution;
-pub mod map_solution;
 pub mod table_solution;
 pub mod debug_output;
 pub mod diff_output;
