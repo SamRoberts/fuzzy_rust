@@ -7,18 +7,12 @@
 //!
 //! This crate is very early in it's development, it's API is akward, and will likely be changed in
 //! breaking ways several times before it matures. We don't currently implement any convenience
-//! functions which match a pattern against a text in one call. Instead, the crate provides
-//! implementations of the following three traits, which can be combined to do the match:
-//!
-//! - a [`Question`] produces a [`Problem`] to be solved.
-//! - a [`Solution`] calculates the optimal match and provides the corresponding
-//!   [`score`](Solution::score) and [`trace`](Solution::trace).
-//! - an [`Output`] displays [`Problem`] and [`Solution`] info to the user.
+//! functions which match a pattern against a text in one call.
 //!
 //! Implementations can be combined as follows:
 //!
 //! ```rust
-//! use fuzzy::{Question, Solution, Output};
+//! use fuzzy::{Solution, Output};
 //! use fuzzy::regex_question::RegexQuestion;
 //! use fuzzy::table_solution::TableSolution;
 //! use fuzzy::diff_output::DiffOutput;
@@ -34,18 +28,6 @@
 //!     Ok(())
 //! }
 //! ```
-//!
-//! # Overview
-//!
-//! The main three traits in our API are [`Question`], [`Solution`], and [`Output`]. See
-//! submodules for the various implementations.
-//!
-//! In addition to these traits:
-//!
-//! - The [`Problem`] contains the parsed [`pattern`](Problem::pattern) and [`text`](Problem::text).
-//! - From the [`Solution`]:
-//!    - The [`score`](Solution::score) is a simple `usize`.
-//!    - A [`Step`] is a single item from the optimal [`trace`](Solution::trace).
 
 use std::fmt::Display;
 use regex_syntax::hir;
@@ -57,15 +39,6 @@ pub mod debug_output;
 pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
-
-/// A builder of [`Problem`] values.
-///
-/// Questions are built from some specification of a pattern and text, but the details are not part
-/// of this API: different Question implementations can do this differently.
-pub trait Question<Error> {
-    /// Try to build a [`Problem`].
-    fn ask(&self) -> Result<Problem<Element>, Error>;
-}
 
 /// Calculates the optimal solution for a [`Problem`].
 ///

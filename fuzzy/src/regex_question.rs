@@ -1,5 +1,4 @@
-//! An implementation of [`Question`](crate::Question) that parses the pattern using
-//! [`regex_syntax`](https://docs.rs/regex-syntax).
+//! Parses pattern using [`regex_syntax`](https://docs.rs/regex-syntax).
 //!
 //! [`regex_syntax`](https://docs.rs/regex-syntax) sometimes uses bytes in their API, while this
 //! crate currently operates on unicode characters. For now, we are getting around this by naively
@@ -7,7 +6,7 @@
 
 use regex_syntax;
 use regex_syntax::hir;
-use crate::{Atoms, Class, Element, Match, Pattern, Problem, Question, Repetition};
+use crate::{Atoms, Class, Element, Match, Pattern, Problem, Repetition};
 use crate::error::Error;
 
 pub struct RegexQuestion {
@@ -15,15 +14,13 @@ pub struct RegexQuestion {
     pub text: String,
 }
 
-impl Question<Error> for RegexQuestion {
-    fn ask(&self) -> Result<Problem<Element>, Error> {
+impl RegexQuestion {
+    pub fn ask(&self) -> Result<Problem<Element>, Error> {
         let pattern = Self::parse_pattern(&self.pattern_regex)?;
         let text = Atoms { atoms: self.text.chars().collect() };
         Ok(Problem { pattern, text })
     }
-}
 
-impl RegexQuestion {
     fn parse_pattern(pattern: &str) -> Result<Pattern<Element>, Error> {
         let hir = regex_syntax::parse(pattern)?;
         Self::pattern(Self::parse_impl(&hir))
