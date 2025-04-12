@@ -12,8 +12,9 @@
 //! Implementations can be combined as follows:
 //!
 //! ```rust
-//! use fuzzy::{Solution, Output};
+//! use fuzzy::Output;
 //! use fuzzy::regex_question::RegexQuestion;
+//! use fuzzy::lattice_solution::LatticeSolution;
 //! use fuzzy::table_solution::TableSolution;
 //! use fuzzy::diff_output::DiffOutput;
 //! use fuzzy::error::Error;
@@ -22,7 +23,7 @@
 //!     let question = RegexQuestion { pattern_regex, text };
 //!     let problem = question.ask()?;
 //!     let problem_core = problem.desugar();
-//!     let solution = TableSolution::solve(&problem_core)?;
+//!     let solution: TableSolution = LatticeSolution::solve(&problem_core)?;
 //!     let output = DiffOutput::new(&solution.score(), &solution.trace());
 //!     println!("{}", output);
 //!     Ok(())
@@ -40,30 +41,13 @@ pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
 
-/// Calculates the optimal solution for a [`Problem`].
-///
-/// In practice, our solution implementations to date are simply structs directly storing the final
-/// calculated `score` and `trace`. We will probably change this API in the future.
-pub trait Solution<Error> : Sized {
-    /// Try to figure out the solution for a [`Problem`].
-    fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error>;
-
-    /// Return the final score for the solution.
-    ///
-    /// This score represents the cost of mismatches: `0` is best, higher worse.
-    fn score(&self) -> &usize;
-
-    /// Return the [`Step`]s followed by the optimal match between pattern and text.
-    fn trace(&self) -> &Vec<Step<Match, char>>;
-}
-
 /// Displays the final solution.
 ///
 /// Output implementations are just types that implement
 /// [`Display`](https://doc.rust-lang.org/std/fmt/trait.Display.html) and can be constructed out of
-/// the [`score`](Solution::score) and [`trace`](Solution::trace).
+/// the [`score`](TableSolution::score) and [`trace`](TableSolution::trace).
 ///
-/// If the [`Solution`] API changes, we will probably change this API as well.
+/// If the [`TableSolution`] API changes, we will probably change this API as well.
 pub trait Output : Display {
     /// Build the display. This value will have a user-friendly string representation.
     fn new(score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
@@ -210,7 +194,7 @@ impl Class {
     }
 }
 
-/// An individual element in [`Solution::trace`].
+/// An individual element in [`TableSolution::trace`].
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum Step<P, T> {
     Hit(P, T),
