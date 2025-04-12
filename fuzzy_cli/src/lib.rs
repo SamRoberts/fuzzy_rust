@@ -40,6 +40,6 @@ fn run_impl<O: Output>(question: RegexQuestion) -> Result<String, Error> {
     let problem = question.ask()?;
     let problem_core = problem.desugar();
     let solution = TableSolution::solve(&problem_core)?;
-    let output = O::new(&solution.score(), &solution.trace());
+    let output = O::new(&solution.score, &solution.trace);
     Ok(format!("{}", output))
 }

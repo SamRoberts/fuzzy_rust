@@ -11,23 +11,11 @@ use nonempty::{NonEmpty, nonempty};
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct TableSolution {
-    score: usize,
-    trace: Vec<Step<Match, char>>,
+    pub score: usize,
+    pub trace: Vec<Step<Match, char>>,
 }
 
 impl TableSolution {
-    pub fn new(score: usize, trace: Vec<Step<Match, char>>) -> Self {
-        TableSolution { score, trace }
-    }
-
-    pub fn score(&self) -> &usize {
-        &self.score
-    }
-
-    pub fn trace(&self) -> &Vec<Step<Match, char>> {
-        &self.trace
-    }
-
     pub fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error> {
         let conf = Config::new(problem);
         let mut state = State::new(&conf);
@@ -69,7 +57,7 @@ impl TableSolution {
             return Err(Error::IncompleteFinalState);
         }
 
-        Ok(Self::new(score, trace))
+        Ok(Self { score, trace })
     }
 
     fn calculate_optimal_path(
@@ -545,8 +533,8 @@ pub mod test_logic {
     pub fn test_solve(test_case: TestCase) {
         let desugared = test_case.problem.desugar();
         let actual = TableSolution::solve(&desugared).unwrap();
-        assert_eq!(test_case.score, *actual.score());
-        assert_eq!(test_case.trace, *actual.trace());
+        assert_eq!(test_case.score, actual.score);
+        assert_eq!(test_case.trace, actual.trace);
     }
 }
 #[cfg(test)]

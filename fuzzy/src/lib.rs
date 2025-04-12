@@ -23,7 +23,7 @@
 //!     let problem = question.ask()?;
 //!     let problem_core = problem.desugar();
 //!     let solution = TableSolution::solve(&problem_core)?;
-//!     let output = DiffOutput::new(&solution.score(), &solution.trace());
+//!     let output = DiffOutput::new(&solution.score, &solution.trace);
 //!     println!("{}", output);
 //!     Ok(())
 //! }
