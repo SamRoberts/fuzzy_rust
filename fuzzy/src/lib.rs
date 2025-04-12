@@ -4,29 +4,6 @@
 //!
 //! In lieu of better documentation, see the project README for more discussion about the regex
 //! features we support and how well the "closest match" works in practice.
-//!
-//! This crate is very early in it's development, it's API is akward, and will likely be changed in
-//! breaking ways several times before it matures. We don't currently implement any convenience
-//! functions which match a pattern against a text in one call.
-//!
-//! Implementations can be combined as follows:
-//!
-//! ```rust
-//! use fuzzy::regex_question::RegexQuestion;
-//! use fuzzy::table_solution::TableSolution;
-//! use fuzzy::diff_output::DiffOutput;
-//! use fuzzy::error::Error;
-//!
-//! fn fuzzy_match(pattern_regex: String, text: String) -> Result<(), Error> {
-//!     let question = RegexQuestion { pattern_regex, text };
-//!     let problem = question.ask()?;
-//!     let problem_core = problem.desugar();
-//!     let solution = TableSolution::solve(&problem_core)?;
-//!     let output = DiffOutput::new(&solution.score, &solution.trace);
-//!     println!("{}", output);
-//!     Ok(())
-//! }
-//! ```
 
 use regex_syntax::hir;
 
@@ -35,6 +12,20 @@ pub mod table_solution;
 pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
+
+use regex_question::RegexQuestion;
+use table_solution::TableSolution;
+use diff_output::DiffOutput;
+use error::Error;
+
+pub fn fuzzy_match(pattern_regex: String, text: String) -> Result<DiffOutput, Error> {
+    let question = RegexQuestion { pattern_regex, text };
+    let problem = question.ask()?;
+    let problem_core = problem.desugar();
+    let solution = TableSolution::solve(&problem_core)?;
+    let output = DiffOutput::new(&solution.score, &solution.trace);
+    return Ok(output);
+}
 
 /// A problem to be solved: contains the pattern we are matching text against, as well as the text
 /// which may or may not match it.
