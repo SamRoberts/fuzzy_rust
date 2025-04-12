@@ -1,4 +1,4 @@
-use fuzzy::{Output, Question, Solution};
+use fuzzy::{Output, Solution};
 use fuzzy::diff_output::{Chunk, DiffOutput};
 use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;

@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuzzy::{Output, Question, Solution};
+use fuzzy::{Output, Solution};
 use fuzzy::diff_output::DiffOutput;
 use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;
@@ -33,10 +33,10 @@ pub fn run(args: Args) -> Result<String, Error> {
     };
 
     let question = RegexQuestion { pattern_regex, text };
-    run_impl::<RegexQuestion, TableSolution, DiffOutput>(question)
+    run_impl::<TableSolution, DiffOutput>(question)
 }
 
-fn run_impl<Q: Question<Error>, S: Solution<Error>, O: Output>(question: Q) -> Result<String, Error> {
+fn run_impl<S: Solution<Error>, O: Output>(question: RegexQuestion) -> Result<String, Error> {
     let problem = question.ask()?;
     let problem_core = problem.desugar();
     let solution = S::solve(&problem_core)?;
