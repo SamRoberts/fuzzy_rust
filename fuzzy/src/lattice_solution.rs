@@ -1,19 +1,19 @@
-//! Provides a sub-trait of [`Solution`] with a generic [`Solution::solve`] implementation.
+//! Provides a generic solve implementation.
 
-use crate::{ElementCore, Match, Problem, Solution, Step};
+use crate::{ElementCore, Match, Problem, Step};
 use crate::flat_pattern::Flat;
 use crate::error::Error;
 use nonempty::{NonEmpty, nonempty};
 use std::fmt::Debug;
 
-/// A family of [`Solution`] implementations which record state in a lattice of nodes.
+/// A family of solutions hich record state in a lattice of nodes.
 ///
 /// For now, this trait hardcodes the use of a flattened pattern which is easier to index, hardcodes
 /// the node structure, and also the algorithm used to traverse nodes and update their state.
 /// The way in which individual implementations store and index nodes is configurable. In the
 /// future, as we add more features, we may make other parts of the implementation configurable.
 ///
-/// [`LatticeSolution`] implementations get [`Solution::solve`] defined automatically. Instead,
+/// [`LatticeSolution`] implementations get solve defined automatically. Instead,
 /// implementations are required to specify a mutable [`State`](LatticeSolution::State) space
 /// and an [`Ix`](LatticeSolution::Ix) type which addresses it.
 ///
@@ -24,7 +24,7 @@ use std::fmt::Debug;
 /// Implementation must ensure that [`can_restart`](LatticeIx::can_restart) is implemented
 /// correctly, so that these links never form a loop. These links form a
 /// [lattice](https://en.wikipedia.org/wiki/Lattice_(order)).
-pub trait LatticeSolution : Sized  + Solution<Error> {
+pub trait LatticeSolution : Sized  {
     /// Carries immutable information derived from the [`Problem`](crate::Problem) being solved.
     type Conf: LatticeConfig<Self::Ix>;
     /// Mutable state being updated while solving.
@@ -35,10 +35,23 @@ pub trait LatticeSolution : Sized  + Solution<Error> {
 
     fn new(score: usize, trace: Vec<Step<Match, char>>) -> Self;
 
+    fn score(&self) -> &usize {
+        LatticeSolution::score_lattice(self)
+    }
+
+    fn trace(&self) -> &Vec<Step<Match, char>> {
+        LatticeSolution::trace_lattice(self)
+    }
+
+    fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error> {
+        LatticeSolution::solve_lattice(&problem)
+    }
+
+
     fn score_lattice(&self) -> &usize;
     fn trace_lattice(&self) -> &Vec<Step<Match, char>>;
 
-    /// [`Solution::solve`] implementation.
+    /// solve implementation.
     fn solve_lattice(problem: &Problem<ElementCore>) -> Result<Self, Error> {
         let conf = Self::Conf::new(problem);
         let mut state = Self::State::new(&conf);
@@ -172,22 +185,6 @@ struct Down<Ix> {
 struct Back<Ix> {
     current: Ix,
     child: Ix,
-}
-
-impl <Sln> Solution<Error> for Sln where
-    Sln: LatticeSolution,
-{
-    fn score(&self) -> &usize {
-        LatticeSolution::score_lattice(self)
-    }
-
-    fn trace(&self) -> &Vec<Step<Match, char>> {
-        LatticeSolution::trace_lattice(self)
-    }
-
-    fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error> {
-        LatticeSolution::solve_lattice(&problem)
-    }
 }
 
 pub trait LatticeConfig<Ix> {
