@@ -14,7 +14,6 @@
 //! ```rust
 //! use fuzzy::Output;
 //! use fuzzy::regex_question::RegexQuestion;
-//! use fuzzy::lattice_solution::LatticeSolution;
 //! use fuzzy::table_solution::TableSolution;
 //! use fuzzy::diff_output::DiffOutput;
 //! use fuzzy::error::Error;
@@ -23,7 +22,7 @@
 //!     let question = RegexQuestion { pattern_regex, text };
 //!     let problem = question.ask()?;
 //!     let problem_core = problem.desugar();
-//!     let solution: TableSolution = LatticeSolution::solve(&problem_core)?;
+//!     let solution = TableSolution::solve(&problem_core)?;
 //!     let output = DiffOutput::new(&solution.score(), &solution.trace());
 //!     println!("{}", output);
 //!     Ok(())
@@ -34,7 +33,6 @@ use std::fmt::Display;
 use regex_syntax::hir;
 
 pub mod regex_question;
-pub mod lattice_solution;
 pub mod table_solution;
 pub mod debug_output;
 pub mod diff_output;

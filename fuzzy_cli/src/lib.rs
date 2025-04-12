@@ -1,7 +1,6 @@
 use clap::Parser;
 use fuzzy::Output;
 use fuzzy::diff_output::DiffOutput;
-use fuzzy::lattice_solution::LatticeSolution;
 use fuzzy::table_solution::TableSolution;
 use fuzzy::regex_question::RegexQuestion;
 use fuzzy::error::Error;
@@ -40,7 +39,7 @@ pub fn run(args: Args) -> Result<String, Error> {
 fn run_impl<O: Output>(question: RegexQuestion) -> Result<String, Error> {
     let problem = question.ask()?;
     let problem_core = problem.desugar();
-    let solution: TableSolution = LatticeSolution::solve(&problem_core)?;
+    let solution = TableSolution::solve(&problem_core)?;
     let output = O::new(&solution.score(), &solution.trace());
     Ok(format!("{}", output))
 }
