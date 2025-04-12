@@ -12,7 +12,6 @@
 //! Implementations can be combined as follows:
 //!
 //! ```rust
-//! use fuzzy::Output;
 //! use fuzzy::regex_question::RegexQuestion;
 //! use fuzzy::table_solution::TableSolution;
 //! use fuzzy::diff_output::DiffOutput;
@@ -29,27 +28,13 @@
 //! }
 //! ```
 
-use std::fmt::Display;
 use regex_syntax::hir;
 
 pub mod regex_question;
 pub mod table_solution;
-pub mod debug_output;
 pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
-
-/// Displays the final solution.
-///
-/// Output implementations are just types that implement
-/// [`Display`](https://doc.rust-lang.org/std/fmt/trait.Display.html) and can be constructed out of
-/// the [`score`](TableSolution::score) and [`trace`](TableSolution::trace).
-///
-/// If the [`TableSolution`] API changes, we will probably change this API as well.
-pub trait Output : Display {
-    /// Build the display. This value will have a user-friendly string representation.
-    fn new(score: &usize, trace: &Vec<Step<Match, char>>) -> Self;
-}
 
 /// A problem to be solved: contains the pattern we are matching text against, as well as the text
 /// which may or may not match it.
