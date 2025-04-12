@@ -1,7 +1,5 @@
 use clap::Parser;
-use fuzzy::diff_output::DiffOutput;
-use fuzzy::table_solution::TableSolution;
-use fuzzy::regex_question::RegexQuestion;
+use fuzzy;
 use fuzzy::error::Error;
 use std::fs;
 
@@ -31,14 +29,6 @@ pub fn run(args: Args) -> Result<String, Error> {
         fs::read_to_string(args.text)?
     };
 
-    let question = RegexQuestion { pattern_regex, text };
-    run_impl(question)
-}
-
-fn run_impl(question: RegexQuestion) -> Result<String, Error> {
-    let problem = question.ask()?;
-    let problem_core = problem.desugar();
-    let solution = TableSolution::solve(&problem_core)?;
-    let output = DiffOutput::new(&solution.score, &solution.trace);
+    let output = fuzzy::fuzzy_match(pattern_regex, text)?;
     Ok(format!("{}", output))
 }

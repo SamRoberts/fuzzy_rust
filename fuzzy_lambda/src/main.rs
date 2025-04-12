@@ -1,6 +1,6 @@
-use fuzzy::diff_output::{Chunk, DiffOutput};
-use fuzzy::table_solution::TableSolution;
-use fuzzy::regex_question::RegexQuestion;
+use fuzzy;
+use fuzzy::diff_output::Chunk;
+
 use lambda_http::{run, service_fn, Body, Error, Request, Response};
 use serde::{Serialize, Deserialize};
 
@@ -15,7 +15,6 @@ struct Args {
 
 #[derive(Serialize)]
 struct Out {
-    score: usize,
     trace: Vec<OutChunk>,
 }
 
@@ -51,12 +50,9 @@ impl OutChunk {
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     let body_str = std::str::from_utf8(event.body())?;
     let args = serde_json::from_str::<Args>(body_str)?;
+    let output = fuzzy::fuzzy_match(args.pattern, args.text)?;
 
-    let problem = RegexQuestion { pattern_regex: args.pattern, text: args.text }.ask()?;
-    let problem_core = problem.desugar();
-    let solution = TableSolution::solve(&problem_core)?;
-    let output = DiffOutput::new(&solution.score, &solution.trace);
-    let body = Out { score: solution.score, trace: OutChunk::from(&output.chunks) };
+    let body = Out { trace: OutChunk::from(&output.chunks) };
     let body_json = serde_json::to_string(&body)?;
 
     let resp = Response::builder()
