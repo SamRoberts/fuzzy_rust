@@ -158,7 +158,7 @@ impl Class {
     }
 }
 
-/// An individual element in [`TableSolution::trace`].
+/// An individual element in [`Solution::trace`].
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum Step<P, T> {
     Hit(P, T),
