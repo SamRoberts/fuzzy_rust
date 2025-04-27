@@ -1,4 +1,4 @@
-//! A theoretically faster implementation of [`Solution`](crate::Solution).
+//! A theoretically faster solver than my initial cached recursive implementation.
 //!
 //! This implementation pre-allocates a [vector](State) storing state for all [nodes](Ix), so in
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
@@ -114,7 +114,7 @@ fn calculate_optimal_path(
     Ok(())
 }
 
-/// Stores the text and pattern from the original [`Problem`](crate::Problem).
+/// Flattens the text and pattern so we can easily index each one.
 ///
 /// Our state stores an array of nodes. This array forms a table, with one dimension representing
 /// the text, while the other dimension represents an expanded pattern, per [`FlatPattern::custom`].
@@ -240,11 +240,12 @@ impl State {
 }
 
 /// Indexes into [`State`].
+/// This struct is a LOT bigger than I initially expected, attempt to reduce size in the future.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct Ix {
-    /// The index into the [flattened `Problem::pattern`](crate::flat_pattern::FlatPattern).
+    /// The index into the flat pattern.
     pub pattern: usize,
-    /// The index into [`Problem::text`](crate::Problem::text).
+    /// The index into the text.
     pub text: usize,
     /// This field tracks how many times we are repeating each pattern element.
     pub reps: usize,

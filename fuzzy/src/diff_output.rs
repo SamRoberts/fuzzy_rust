@@ -2,7 +2,7 @@ use crate::{Match, Step};
 use std::fmt;
 
 // NOTE: because we do character by character diffs, this won't be the real diff format
-// for now. Instead, we will mimic the git diff format, expect we print out all matching
+// for now. Instead, we will mimic the git diff format, except we print out all matching
 // lines and don't print any line numbers.
 //
 // The wording in these structs treat the patttern as the original, and text as new. So
@@ -12,6 +12,8 @@ use std::fmt;
 // TODO make this configurable
 const ANY: char = '?';
 
+/// A quick display of the final trace, similar to the git character-level diff format.
+/// Convenient for small texts.
 pub struct DiffOutput {
     pub chunks: Vec<Chunk>,
 }
