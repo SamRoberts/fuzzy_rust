@@ -4,122 +4,114 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{Atoms, ElementCore, Match, Pattern, Step};
+use crate::{Atoms, ElementCore, Match, Pattern, Solution, Step};
 use crate::error::Error;
 use crate::flat_pattern::{Flat, FlatPattern};
 use nonempty::{NonEmpty, nonempty};
 
-#[derive(Eq, PartialEq, Debug)]
-pub struct TableSolution {
-    pub score: usize,
-    pub trace: Vec<Step<Match, char>>,
+pub fn solve(pattern: &Pattern<ElementCore>, text: &Atoms) -> Result<Solution, Error> {
+    let conf = Config::new(pattern, text);
+    let mut state = State::new(&conf);
+
+    let start_ix = conf.start();
+    let end_ix = conf.end();
+
+    let _ = calculate_optimal_path(&conf, &mut state)?;
+
+    let start_node = state.get(start_ix);
+    let score = start_node.done_info()
+        .map(|i| i.0)
+        .map_err(|_| Error::IncompleteFinalState)?;
+
+    let mut trace = vec![];
+    let mut from = start_ix;
+    loop {
+        let node = state.get(from);
+        if !node.is_done() || from == end_ix { break; }
+        let (patt, text) = conf.get(from);
+        let (_, step_type, next) = node.done_info()?;
+        if let Some(step) =  step_type.step() {
+            let final_step = step.map(
+                |_| match patt {
+                    Some(Flat::Lit(c))   => Match::Lit(*c),
+                    Some(Flat::Class(c)) => Match::Class(c.clone()),
+                    unexpected           => panic!("Unexpected trace pattern {:?}", unexpected),
+                },
+                |_| match text {
+                    Some(c) => *c,
+                    unexpected         => panic!("Unexpected trace text {:?}", unexpected),
+                }
+            );
+            trace.push(final_step);
+        }
+        from = next;
+    }
+    if from != end_ix {
+        return Err(Error::IncompleteFinalState);
+    }
+
+    Ok(Solution { score, trace })
 }
 
-impl TableSolution {
-    pub fn solve(pattern: &Pattern<ElementCore>, text: &Atoms) -> Result<Self, Error> {
-        let conf = Config::new(pattern, text);
-        let mut state = State::new(&conf);
+fn calculate_optimal_path(
+    conf: &Config,
+    state: &mut State,
+ ) -> Result<(), Error> {
+    let start_ix = conf.start();
+    let end_ix = conf.end();
 
-        let start_ix = conf.start();
-        let end_ix = conf.end();
+    let mut loop_state = LoopState::Down(Down {
+        parent: Default::default(),
+        current: start_ix,
+    });
 
-        let _ = Self::calculate_optimal_path(&conf, &mut state)?;
+    let mut loop_counter = 0;
 
-        let start_node = state.get(start_ix);
-        let score = start_node.done_info()
-            .map(|i| i.0)
-            .map_err(|_| Error::IncompleteFinalState)?;
-
-        let mut trace = vec![];
-        let mut from = start_ix;
-        loop {
-            let node = state.get(from);
-            if !node.is_done() || from == end_ix { break; }
-            let (patt, text) = conf.get(from);
-            let (_, step_type, next) = node.done_info()?;
-            if let Some(step) =  step_type.step() {
-                let final_step = step.map(
-                    |_| match patt {
-                        Some(Flat::Lit(c))   => Match::Lit(*c),
-                        Some(Flat::Class(c)) => Match::Class(c.clone()),
-                        unexpected           => panic!("Unexpected trace pattern {:?}", unexpected),
-                    },
-                    |_| match text {
-                        Some(c) => *c,
-                        unexpected         => panic!("Unexpected trace text {:?}", unexpected),
-                    }
-                );
-                trace.push(final_step);
+    loop {
+        loop_counter += 1;
+        if loop_counter >= 1000000000 { // TODO make this max configurable
+            return Err(Error::ExceededMaxSteps(loop_counter));
+        }
+        let new_parent = match &loop_state {
+            LoopState::Down(down) if state.get(down.current).is_ready() => {
+                let (flat, text) = conf.get(down.current);
+                let opt_node_type = NodeType::get(flat, text, &down.current);
+                let node_state = state.get_mut(down.current);
+                node_state.initialise(end_ix, down.parent, down.current, opt_node_type)?;
+                down.parent
             }
-            from = next;
-        }
-        if from != end_ix {
-            return Err(Error::IncompleteFinalState);
-        }
+            LoopState::Down(down) => down.parent,
+            LoopState::Back(back) => {
+                let new_child = back.child;
+                let (new_score, _, _) = state.get(new_child).done_info()?;
+                let node_state = state.get_mut(back.current);
+                let new_parent = node_state.update(new_child, back.current, new_score)?;
+                new_parent
+            }
+        };
 
-        Ok(Self { score, trace })
+        let current_ix = loop_state.current();
+        let final_state = state.get(current_ix);
+        if current_ix == start_ix && final_state.is_done() {
+            break;
+        } else if final_state.is_done() {
+            loop_state = LoopState::Back(Back {
+                current: new_parent,
+                child: current_ix,
+            });
+        } else if final_state.is_working() {
+            let current_step_type = final_state.current_step_type()?;
+            let child = conf.step(current_ix, current_step_type);
+            loop_state = LoopState::Down(Down {
+                parent: current_ix,
+                current: child,
+            });
+        } else {
+            return Err(Error::NoNodeProgress(format!("{:?}", current_ix)));
+        }
     }
 
-    fn calculate_optimal_path(
-        conf: &Config,
-        state: &mut State,
-     ) -> Result<(), Error> {
-        let start_ix = conf.start();
-        let end_ix = conf.end();
-
-        let mut loop_state = LoopState::Down(Down {
-            parent: Default::default(),
-            current: start_ix,
-        });
-
-        let mut loop_counter = 0;
-
-        loop {
-            loop_counter += 1;
-            if loop_counter >= 1000000000 { // TODO make this max configurable
-                return Err(Error::ExceededMaxSteps(loop_counter));
-            }
-            let new_parent = match &loop_state {
-                LoopState::Down(down) if state.get(down.current).is_ready() => {
-                    let (flat, text) = conf.get(down.current);
-                    let opt_node_type = NodeType::get(flat, text, &down.current);
-                    let node_state = state.get_mut(down.current);
-                    node_state.initialise(end_ix, down.parent, down.current, opt_node_type)?;
-                    down.parent
-                }
-                LoopState::Down(down) => down.parent,
-                LoopState::Back(back) => {
-                    let new_child = back.child;
-                    let (new_score, _, _) = state.get(new_child).done_info()?;
-                    let node_state = state.get_mut(back.current);
-                    let new_parent = node_state.update(new_child, back.current, new_score)?;
-                    new_parent
-                }
-            };
-
-            let current_ix = loop_state.current();
-            let final_state = state.get(current_ix);
-            if current_ix == start_ix && final_state.is_done() {
-                break;
-            } else if final_state.is_done() {
-                loop_state = LoopState::Back(Back {
-                    current: new_parent,
-                    child: current_ix,
-                });
-            } else if final_state.is_working() {
-                let current_step_type = final_state.current_step_type()?;
-                let child = conf.step(current_ix, current_step_type);
-                loop_state = LoopState::Down(Down {
-                    parent: current_ix,
-                    current: child,
-                });
-            } else {
-                return Err(Error::NoNodeProgress(format!("{:?}", current_ix)));
-            }
-        }
-
-        Ok(())
-    }
+    Ok(())
 }
 
 /// Stores the text and pattern from the original [`Problem`](crate::Problem).
@@ -532,7 +524,7 @@ pub mod test_logic {
 
     pub fn test_solve(test_case: TestCase) {
         let desugared = test_case.pattern.desugar();
-        let actual = TableSolution::solve(&desugared, &test_case.text).unwrap();
+        let actual = solve(&desugared, &test_case.text).unwrap();
         assert_eq!(test_case.score, actual.score);
         assert_eq!(test_case.trace, actual.trace);
     }

@@ -14,7 +14,7 @@ pub mod flat_pattern;
 pub mod error;
 
 use regex_pattern::parse_pattern;
-use table_solution::TableSolution;
+use table_solution::solve;
 use diff_output::DiffOutput;
 use error::Error;
 
@@ -22,9 +22,15 @@ pub fn fuzzy_match(pattern_regex: String, text_str: String) -> Result<DiffOutput
     let pattern = parse_pattern(&pattern_regex)?;
     let text = Atoms { atoms: text_str.chars().collect() };
     let pattern_core = pattern.desugar();
-    let solution = TableSolution::solve(&pattern_core, &text)?;
+    let solution = solve(&pattern_core, &text)?;
     let output = DiffOutput::new(&solution.score, &solution.trace);
     return Ok(output);
+}
+
+#[derive(Eq, PartialEq, Debug)]
+pub struct Solution {
+    pub score: usize,
+    pub trace: Vec<Step<Match, char>>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
