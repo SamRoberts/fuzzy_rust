@@ -4,7 +4,7 @@
 //! theory it should be relatively efficient, although we haven't done any benchmarks yet. We will
 //! do these in the future.
 
-use crate::{ElementCore, Match, Problem, Step};
+use crate::{Atoms, ElementCore, Match, Pattern, Step};
 use crate::error::Error;
 use crate::flat_pattern::{Flat, FlatPattern};
 use nonempty::{NonEmpty, nonempty};
@@ -16,8 +16,8 @@ pub struct TableSolution {
 }
 
 impl TableSolution {
-    pub fn solve(problem: &Problem<ElementCore>) -> Result<Self, Error> {
-        let conf = Config::new(problem);
+    pub fn solve(pattern: &Pattern<ElementCore>, text: &Atoms) -> Result<Self, Error> {
+        let conf = Config::new(pattern, text);
         let mut state = State::new(&conf);
 
         let start_ix = conf.start();
@@ -132,9 +132,9 @@ pub struct Config {
 }
 
 impl Config {
-    fn new(problem: &Problem<ElementCore>) -> Self {
-        let pattern = FlatPattern::custom(&problem.pattern, 1);
-        let text = problem.text.atoms.clone();
+    fn new(pattern: &Pattern<ElementCore>, text: &Atoms) -> Self {
+        let pattern = FlatPattern::custom(pattern, 1);
+        let text = text.atoms.clone();
         Config { text, pattern }
     }
 
@@ -531,8 +531,8 @@ pub mod test_logic {
     use crate::test_cases::TestCase;
 
     pub fn test_solve(test_case: TestCase) {
-        let desugared = test_case.problem.desugar();
-        let actual = TableSolution::solve(&desugared).unwrap();
+        let desugared = test_case.pattern.desugar();
+        let actual = TableSolution::solve(&desugared, &test_case.text).unwrap();
         assert_eq!(test_case.score, actual.score);
         assert_eq!(test_case.trace, actual.trace);
     }
