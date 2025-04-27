@@ -13,14 +13,15 @@ pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
 
-use regex_question::RegexQuestion;
+use regex_question::parse_pattern;
 use table_solution::TableSolution;
 use diff_output::DiffOutput;
 use error::Error;
 
-pub fn fuzzy_match(pattern_regex: String, text: String) -> Result<DiffOutput, Error> {
-    let question = RegexQuestion { pattern_regex, text };
-    let problem = question.ask()?;
+pub fn fuzzy_match(pattern_regex: String, text_str: String) -> Result<DiffOutput, Error> {
+    let pattern = parse_pattern(&pattern_regex)?;
+    let text = Atoms { atoms: text_str.chars().collect() };
+    let problem = Problem { pattern, text };
     let problem_core = problem.desugar();
     let solution = TableSolution::solve(&problem_core)?;
     let output = DiffOutput::new(&solution.score, &solution.trace);
