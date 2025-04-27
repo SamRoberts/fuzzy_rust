@@ -7,13 +7,13 @@
 
 use regex_syntax::hir;
 
-pub mod regex_question;
+pub mod regex_pattern;
 pub mod table_solution;
 pub mod diff_output;
 pub mod flat_pattern;
 pub mod error;
 
-use regex_question::parse_pattern;
+use regex_pattern::parse_pattern;
 use table_solution::TableSolution;
 use diff_output::DiffOutput;
 use error::Error;
